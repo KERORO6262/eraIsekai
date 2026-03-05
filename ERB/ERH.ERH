@@ -1,62 +1,14 @@
-﻿#DIM HOGE, 3 = 0, 1, 2
-#DIM BOGE, 3 = 4, 5, 6
-#DIMS HOGES, 3 = "A","B","C"
-#DIM CHARADATA CHOGE, 3
+; ==========================================
+; ERA ISEKAI - Global Variable Index Registry
+; ==========================================
+; FLAG 索引（永久保存）
+#DEFINE SYS_INITIALIZED 0
+#DEFINE BASE_DAY 1
+#DEFINE DAY_PHASE 2
+#DEFINE RES_MONEY 10
+#DEFINE RES_MATERIAL 11
+#DEFINE RES_SUPPLY 12
 
-#DIM HOGE2D, 3, 3
-#DIM HOGE3D, 3, 3, 3
-
-#DIM COLUMN, 10, 10
-
-#DIMS COLUMNLOG, 10, 10000
-
-#DIM COLUMNDIV, 10, 20
-
-#DIMS COLUMNDIVLOG, 10, 10000
-
-#DIMS カラム名, 10
-#DIM 選択カラム
-
-#DIM MAX_LINE
-
-#DIM LOOP_BREAK
-
-#DIM CRESULT, 2
-
-#DIM NOWCOLUMN
-#DIM BGMVOLUME = 50
-#DIM SOUNDVOLUME = 50
-
-#DIMS TOOLTIP_TITLE = "TOOLTIPです"
-
-#DIM BRUSH = 0xFFFFFFFF
-#DIM PEN = 0xFFFFFFFF
-#DIM WIDTH = 5
-#DIMS FONTNAME = "ＭＳ ゴシック"
-#DIM SIZE, 6, 2
-#DIM STYLE
-#DIM FONTSIZE = 100
-#DIM ANGLE, 10
-{
-#DIMS FONTLIB =
-"ＭＳ ゴシック",
-"ＭＳ Ｐゴシック",
-"ＭＳ 明朝",
-"ＭＳ Ｐ明朝",
-"たぬゴ角 標準",
-"全児童フォント フェルトペン教漢版-TTF",
-"Meiryo UI",
-"BIZ UDゴシック",
-}
-
-#DIM DASHSTYLE
-#DIM DASHCAP
-
-#DIM TCUSTOM
-#DIM TCOLOR
-#DIM TBGCOLOR = 0xFFFFFF
-#DIMS TFONT = "ＭＳ ゴシック"
-#DIM TFONTSIZE = 18
-#DIM TFORMAT
-#DIM TOOLTIP_COW
-
+; TFLAG 索引（單日/單流程暫存）
+#DEFINE MORNING_DONE 0
+#DEFINE RETURN_PHASE 1
