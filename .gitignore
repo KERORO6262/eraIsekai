@@ -1,0 +1,30 @@
+# --- Emuera 運行與存檔相關 ---
+# 排除所有遊戲存檔（sav 資料夾通常在運行後產生）
+sav/
+*.sav
+global.sav
+
+# 排除除錯日誌與運行紀錄
+debug/
+*.log
+console.log
+
+# 排除 Emuera.NET 運行時產生的暫存設定
+setting.json.bak
+_redump.txt
+
+# --- 開發環境相關 ---
+# 排除 VS Code 的個人化設定
+.vscode/
+*.code-workspace
+
+# 排除作業系統產生的垃圾檔案
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- 資源與大型檔案（選擇性） ---
+Emuera-Rikai-dictionaries/
+
+# 排除位於 resources 的大量測試圖片
+resources/test_assets/
