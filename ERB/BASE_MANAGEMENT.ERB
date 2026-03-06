@@ -74,7 +74,7 @@ FOR LOCAL, 0, LOCAL:90 - 1
         PRINTFORML [{LOCAL + 1}] 狀態：[空]
     ELSE
         LOCAL:1 = ROOM_OWNER:LOCAL
-        PRINTFORML [{LOCAL + 1}] 狀態：[%NAME:LOCAL:1%]
+        PRINTFORML [{LOCAL + 1}] 狀態：[%NAME:(LOCAL:1)%]
     ENDIF
 NEXT
 PRINTL
