@@ -120,7 +120,7 @@ IF TFLAG:MORNING_DONE == 0
 
         LOCAL:1 = ROOM_OWNER:LOCAL
         LOCAL:2 = 3
-        LOCAL:3 = CFLAG:LOCAL:1:CF_MAINT_COST_MOD
+        LOCAL:3 = CFLAG:(LOCAL:1):CF_MAINT_COST_MOD
         LOCAL:2 = LOCAL:2 + LOCAL:2 * LOCAL:3 / 100
         IF LOCAL:2 < 1
             LOCAL:2 = 1
@@ -227,26 +227,26 @@ ELSEIF RESULT == 9
         ENDIF
 
         LOCAL:1 = ROOM_OWNER:LOCAL
-        LOCAL:2 = CFLAG:LOCAL:1:CF_FATIGUE
+        LOCAL:2 = CFLAG:(LOCAL:1):CF_FATIGUE
         LOCAL:3 = 8 + FLAG:BASE_FAC_LV_LOUNGE * 2
         LOCAL:2 -= LOCAL:3
         IF LOCAL:2 < 0
             LOCAL:2 = 0
         ENDIF
-        CFLAG:LOCAL:1:CF_FATIGUE = LOCAL:2
+        CFLAG:(LOCAL:1):CF_FATIGUE = LOCAL:2
 
         IF LOCAL:2 >= 80
-            CFLAG:LOCAL:1:CF_MOOD -= 8
+            CFLAG:(LOCAL:1):CF_MOOD -= 8
         ELSEIF LOCAL:2 >= 60
-            CFLAG:LOCAL:1:CF_MOOD -= 3
+            CFLAG:(LOCAL:1):CF_MOOD -= 3
         ELSE
-            CFLAG:LOCAL:1:CF_MOOD += 1
+            CFLAG:(LOCAL:1):CF_MOOD += 1
         ENDIF
 
-        IF CFLAG:LOCAL:1:CF_MOOD < 0
-            CFLAG:LOCAL:1:CF_MOOD = 0
-        ELSEIF CFLAG:LOCAL:1:CF_MOOD > 100
-            CFLAG:LOCAL:1:CF_MOOD = 100
+        IF CFLAG:(LOCAL:1):CF_MOOD < 0
+            CFLAG:(LOCAL:1):CF_MOOD = 0
+        ELSEIF CFLAG:(LOCAL:1):CF_MOOD > 100
+            CFLAG:(LOCAL:1):CF_MOOD = 100
         ENDIF
     NEXT
 
