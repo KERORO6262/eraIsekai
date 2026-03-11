@@ -147,7 +147,7 @@ IF TFLAG:MORNING_DONE == 0
         LOCAL:10 = ROOM_OWNER_MAX
     ENDIF
 
-    FOR LOCAL, 0, LOCAL:10 - 1
+    FOR LOCAL, 0, LOCAL:10
         IF ROOM_OWNER:LOCAL == -1
             CONTINUE
         ENDIF
@@ -255,7 +255,7 @@ ELSEIF RESULT == 9
         LOCAL:10 = ROOM_OWNER_MAX
     ENDIF
 
-    FOR LOCAL, 0, LOCAL:10 - 1
+    FOR LOCAL, 0, LOCAL:10
         IF ROOM_OWNER:LOCAL == -1
             CONTINUE
         ENDIF
