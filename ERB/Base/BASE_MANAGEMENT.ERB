@@ -74,7 +74,7 @@ ENDIF
 DRAWLINE
 PRINTFORML 【訓練室 Lv.{FLAG:BASE_FAC_LV_TRAIN}】
 PRINTFORML 今日使用次數：{TFLAG:50}/{LOCAL:10}
-PRINTL [1] 基礎訓練（補給 5，疲勞 +20，訓練倍率 +5）
+PRINTL [1] 基礎訓練（消耗 5 點補給，增加疲勞以提升訓練倍率）
 PRINTL [8] 升級訓練室
 PRINTL [9] 返回基地選單
 INPUT RESULT
@@ -148,7 +148,7 @@ ENDIF
 DRAWLINE
 PRINTFORML 【休息室 Lv.{FLAG:BASE_FAC_LV_LOUNGE}】
 PRINTFORML 今日互動次數：{TFLAG:51}/{LOCAL:10}
-PRINTL [1] 日常交流/安撫（疲勞 -30，心情 +10，機率好感 +1）
+PRINTL [1] 日常交流/安撫（大幅減緩疲勞、改善心情，有機會提升好感）
 PRINTL [8] 升級休息室
 PRINTL [9] 返回基地選單
 INPUT RESULT
@@ -345,6 +345,7 @@ FOR LOCAL, 0, LOCAL:20
 NEXT
 IF LOCAL:21 == 0
     PRINTL （目前沒有住宿 NPC）
+    WAIT
     RESULT = -1
     RETURN
 ENDIF
@@ -357,10 +358,11 @@ IF RESULT == 99
 ENDIF
 FOR LOCAL, 0, LOCAL:20
     IF ROOM_OWNER:LOCAL == RESULT
-        RETURN
+        RETURN RESULT
     ENDIF
 NEXT
 PRINTL 請輸入有效的住宿 NPC 編號。
+WAIT
 RESULT = -1
 RETURN
 
