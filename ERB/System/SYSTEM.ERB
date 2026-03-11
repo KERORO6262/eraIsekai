@@ -30,6 +30,7 @@ FLAG:BASE_FAC_LV_LOUNGE = 1
 FLAG:BASE_FAC_LV_ROOM = 1
 
 CALL INIT_ROOM_OWNER
+CALL INIT_WORK_QUEUE
 CALL INIT_CARD_DATA
 
 ; 當日流程保護旗標
@@ -40,6 +41,14 @@ RETURN
 @INIT_ROOM_OWNER
 FOR LOCAL, 0, ROOM_OWNER_MAX - 1
     ROOM_OWNER:LOCAL = -1
+NEXT
+RETURN
+
+@INIT_WORK_QUEUE
+; ===== 工坊佇列初始化 =====
+FOR LOCAL, 0, WORK_Q_MAX
+    WORK_Q_TYPE:LOCAL = 0
+    WORK_Q_REMAIN:LOCAL = 0
 NEXT
 RETURN
 
@@ -129,6 +138,32 @@ IF TFLAG:MORNING_DONE == 0
     LOCAL:23 = 0
     LOCAL:24 = 0
     LOCAL:25 = 0
+    LOCAL:26 = 0
+    LOCAL:30 = 0
+    LOCAL:31 = 0
+    LOCAL:32 = 0
+
+    ; 晨間先推進工坊佇列：剩餘天數 -1，歸零後立即入庫
+    FOR LOCAL, 0, WORK_Q_MAX
+        IF WORK_Q_REMAIN:LOCAL <= 0
+            CONTINUE
+        ENDIF
+
+        WORK_Q_REMAIN:LOCAL -= 1
+        IF WORK_Q_REMAIN:LOCAL == 0 && WORK_Q_TYPE:LOCAL != 0
+            ITEM:(WORK_Q_TYPE:LOCAL) += 1
+            IF LOCAL:26 == 0
+                LOCAL:30 = WORK_Q_TYPE:LOCAL
+            ELSEIF LOCAL:26 == 1
+                LOCAL:31 = WORK_Q_TYPE:LOCAL
+            ELSEIF LOCAL:26 == 2
+                LOCAL:32 = WORK_Q_TYPE:LOCAL
+            ENDIF
+            LOCAL:26 += 1
+            WORK_Q_TYPE:LOCAL = 0
+            WORK_Q_REMAIN:LOCAL = 0
+        ENDIF
+    NEXT
 
     ; 設施產出：工坊提供金錢/材料，訓練室與休息室提供少量補給回補
     LOCAL:20 = 40 + FLAG:BASE_FAC_LV_WORK * 60
@@ -139,7 +174,7 @@ IF TFLAG:MORNING_DONE == 0
     FLAG:RES_MATERIAL += LOCAL:21
     FLAG:RES_SUPPLY += LOCAL:22
 
-    ; 維護費結算：優先扣補給，不足再扣金錢
+    ; 維護費結算：優先扣補給，不足再扣金錢（房間等級越高，維護費折扣越大）
     LOCAL:10 = FLAG:BASE_FAC_LV_ROOM
     IF LOCAL:10 < 0
         LOCAL:10 = 0
@@ -156,6 +191,11 @@ IF TFLAG:MORNING_DONE == 0
         LOCAL:2 = 3
         LOCAL:3 = CFLAG:(LOCAL:1):CF_MAINT_COST_MOD
         LOCAL:2 = LOCAL:2 + LOCAL:2 * LOCAL:3 / 100
+        LOCAL:7 = 100 - FLAG:BASE_FAC_LV_ROOM * 5
+        IF LOCAL:7 < 50
+            LOCAL:7 = 50
+        ENDIF
+        LOCAL:2 = LOCAL:2 * LOCAL:7 / 100
         IF LOCAL:2 < 1
             LOCAL:2 = 1
         ENDIF
@@ -196,6 +236,18 @@ IF TFLAG:MORNING_DONE == 0
     PRINTL --- 晨報 ---
     PRINTFORML 設施收益：金錢 +{LOCAL:20} / 材料 +{LOCAL:21} / 補給 +{LOCAL:22}
     PRINTFORML 維護扣減：補給 -{LOCAL:23} / 金錢 -{LOCAL:24}
+    IF LOCAL:26 > 0
+        ; 逐筆列出完成物品，供晨報顯示
+        IF LOCAL:30 != 0
+            PRINTFORML 製作完成：%ITEMNAME:(LOCAL:30)%
+        ENDIF
+        IF LOCAL:31 != 0
+            PRINTFORML 製作完成：%ITEMNAME:(LOCAL:31)%
+        ENDIF
+        IF LOCAL:32 != 0
+            PRINTFORML 製作完成：%ITEMNAME:(LOCAL:32)%
+        ENDIF
+    ENDIF
     IF LOCAL:25 > 0
         PRINTFORML [警告] 有 {LOCAL:25} 名入住 NPC 維護費未足額支付！
     ENDIF
