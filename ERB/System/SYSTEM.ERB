@@ -30,6 +30,7 @@ FLAG:BASE_FAC_LV_LOUNGE = 1
 FLAG:BASE_FAC_LV_ROOM = 1
 
 CALL INIT_ROOM_OWNER
+CALL INIT_WORK_QUEUE
 CALL INIT_CARD_DATA
 
 ; 當日流程保護旗標
@@ -40,6 +41,14 @@ RETURN
 @INIT_ROOM_OWNER
 FOR LOCAL, 0, ROOM_OWNER_MAX - 1
     ROOM_OWNER:LOCAL = -1
+NEXT
+RETURN
+
+@INIT_WORK_QUEUE
+; 工坊生產佇列初始化
+FOR LOCAL, 0, WORK_Q_MAX
+    WORK_Q_TYPE:LOCAL = 0
+    WORK_Q_REMAIN:LOCAL = 0
 NEXT
 RETURN
 
@@ -154,6 +163,12 @@ IF TFLAG:MORNING_DONE == 0
 
         LOCAL:1 = ROOM_OWNER:LOCAL
         LOCAL:2 = 3
+        ; 房間等級折扣：每級 -5%，最多折扣至 50%
+        LOCAL:7 = FLAG:BASE_FAC_LV_ROOM * 5
+        IF LOCAL:7 > 50
+            LOCAL:7 = 50
+        ENDIF
+        LOCAL:2 = LOCAL:2 * (100 - LOCAL:7) / 100
         LOCAL:3 = CFLAG:(LOCAL:1):CF_MAINT_COST_MOD
         LOCAL:2 = LOCAL:2 + LOCAL:2 * LOCAL:3 / 100
         IF LOCAL:2 < 1
@@ -182,6 +197,28 @@ IF TFLAG:MORNING_DONE == 0
         ENDIF
     NEXT
 
+    ; 工坊生產佇列推進：晨間天數遞減與完工發放
+    LOCAL:30 = 0
+    LOCAL:31 = 0
+    LOCAL:32 = 0
+    FOR LOCAL, 0, WORK_Q_MAX
+        IF WORK_Q_REMAIN:LOCAL > 0
+            WORK_Q_REMAIN:LOCAL -= 1
+            IF WORK_Q_REMAIN:LOCAL < 0
+                WORK_Q_REMAIN:LOCAL = 0
+            ENDIF
+            IF WORK_Q_REMAIN:LOCAL == 0 && WORK_Q_TYPE:LOCAL != 0
+                LOCAL:31 = WORK_Q_TYPE:LOCAL
+                ITEM:(LOCAL:31) += 1
+                WORK_Q_TYPE:LOCAL = 0
+                LOCAL:30 += 1
+                IF LOCAL:32 == 0
+                    LOCAL:32 = LOCAL:31
+                ENDIF
+            ENDIF
+        ENDIF
+    NEXT
+
     ; 防呆：資源不可低於 0
     IF FLAG:RES_MONEY < 0
         FLAG:RES_MONEY = 0
@@ -198,6 +235,13 @@ IF TFLAG:MORNING_DONE == 0
     PRINTFORML 維護扣減：補給 -{LOCAL:23} / 金錢 -{LOCAL:24}
     IF LOCAL:25 > 0
         PRINTFORML [警告] 有 {LOCAL:25} 名入住 NPC 維護費未足額支付！
+    ENDIF
+    IF LOCAL:30 > 0
+        IF LOCAL:30 == 1
+            PRINTFORML [工坊] 製作完成：%ITEMNAME:(LOCAL:32)%
+        ELSE
+            PRINTFORML [工坊] 製作完成：{LOCAL:30} 項（含 %ITEMNAME:(LOCAL:32)%）
+        ENDIF
     ENDIF
     PRINTFORML 當前資源：金錢 {FLAG:RES_MONEY} / 材料 {FLAG:RES_MATERIAL} / 補給 {FLAG:RES_SUPPLY}
     TFLAG:MORNING_DONE = 1
