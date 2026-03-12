@@ -171,7 +171,7 @@ FOR LOCAL, 0, LOCAL:10
     IF WORK_Q_TYPE:LOCAL == 0
         PRINTFORML [槽位{LOCAL}] [空閒]
     ELSE
-        PRINTFORML [槽位{LOCAL}] %ITEMNAME:(WORK_Q_TYPE:LOCAL)%（剩餘 {WORK_Q_REMAIN:LOCAL} 天）
+        PRINTFORML [槽位{LOCAL}] %ITEMNAME:(WORK_Q_TYPE:LOCAL)%（剩餘 {WORK_Q_REMAIN:LOCAL} 天） - [{160 + LOCAL}] 取消生產
     ENDIF
 NEXT
 PRINTL
@@ -189,6 +189,43 @@ IF RESULT == 8
     IF RESULT == 1
         FLAG:BASE_FAC_LV_WORK += 1
     ENDIF
+    GOTO FACILITY_WORK_TOP
+ENDIF
+
+; 取消生產：按鈕 ID 使用 160 + 槽位索引（符合 UI 區間規範）
+IF RESULT >= 160 && RESULT < 160 + LOCAL:10
+    LOCAL:11 = RESULT - 160
+    IF WORK_Q_TYPE:(LOCAL:11) == 0
+        PRINTFORML 槽位{LOCAL:11} 目前為空閒，無可取消的生產。
+        GOTO FACILITY_WORK_TOP
+    ENDIF
+
+    ; 依配方原始成本退還 50% 材料（向下取整）
+    LOCAL:12 = WORK_Q_TYPE:(LOCAL:11)
+    LOCAL:13 = 0
+    SELECTCASE LOCAL:12
+        CASE 10001
+            LOCAL:13 = 10
+        CASE 10002
+            LOCAL:13 = 15
+        CASE 10003
+            LOCAL:13 = 7
+        CASE 10004
+            LOCAL:13 = 17
+        CASE 10005
+            LOCAL:13 = 12
+        CASEELSE
+            LOCAL:13 = 0
+    ENDSELECT
+
+    FLAG:RES_MATERIAL += LOCAL:13
+    IF FLAG:RES_MATERIAL < 0
+        FLAG:RES_MATERIAL = 0
+    ENDIF
+
+    WORK_Q_TYPE:(LOCAL:11) = 0
+    WORK_Q_REMAIN:(LOCAL:11) = 0
+    PRINTFORML 已取消生產 %ITEMNAME:(LOCAL:12)%，退還材料 {LOCAL:13} 點。
     GOTO FACILITY_WORK_TOP
 ENDIF
 
