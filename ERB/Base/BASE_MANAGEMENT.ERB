@@ -200,20 +200,20 @@ IF RESULT >= 160 && RESULT < 160 + LOCAL:10
         GOTO FACILITY_WORK_TOP
     ENDIF
 
-    ; 依配方原始成本退還 50% 材料（向下取整）
+    ; 依配方原始成本全額退還材料（100%）
     LOCAL:12 = WORK_Q_TYPE:(LOCAL:11)
     LOCAL:13 = 0
     SELECTCASE LOCAL:12
         CASE 10001
-            LOCAL:13 = 10
+            LOCAL:13 = 20
         CASE 10002
-            LOCAL:13 = 15
+            LOCAL:13 = 30
         CASE 10003
-            LOCAL:13 = 7
+            LOCAL:13 = 15
         CASE 10004
-            LOCAL:13 = 17
+            LOCAL:13 = 35
         CASE 10005
-            LOCAL:13 = 12
+            LOCAL:13 = 25
         CASEELSE
             LOCAL:13 = 0
     ENDSELECT
@@ -324,7 +324,7 @@ IF FLAG:RES_MATERIAL < 0
 ENDIF
 WORK_Q_TYPE:(LOCAL:11) = LOCAL:20
 WORK_Q_REMAIN:(LOCAL:11) = LOCAL:23
-PRINTFORML 已投入槽位{LOCAL:11}：%ITEMNAME:(LOCAL:20)%（{LOCAL:23} 天）
+PRINTFORML 已投入槽位{LOCAL:11}：%ITEMNAME:(LOCAL:20)%（{LOCAL:23} 天），消耗材料 {LOCAL:22} 點。
 RETURN
 
 @FACILITY_LOUNGE
