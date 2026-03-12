@@ -87,6 +87,162 @@ CARD_BASE_POWER:10005 = 0
 CARD_BASE_ACC:10005 = 100
 RETURN
 
+@INIT_CHARA_STATS, ARG
+LOCAL:0 = ARG
+LOCAL:1 = CFLAG:(LOCAL:0):CF_RACE
+LOCAL:2 = CFLAG:(LOCAL:0):CF_JOB
+
+; 級距：速度、暴擊、物攻、魔攻、特攻、物防、魔防
+LOCAL:10 = 2
+LOCAL:11 = 2
+LOCAL:12 = 2
+LOCAL:13 = 2
+LOCAL:14 = 2
+LOCAL:15 = 2
+LOCAL:16 = 2
+
+; 種族基礎
+SELECTCASE LOCAL:1
+    CASE RACE_HUMAN
+        ; 均衡，維持預設
+    CASE RACE_ELF
+        LOCAL:10 = 3
+        LOCAL:12 = 1
+        LOCAL:13 = 4
+        LOCAL:15 = 1
+        LOCAL:16 = 3
+    CASE RACE_HALFLING
+        LOCAL:10 = 3
+        LOCAL:11 = 3
+        LOCAL:12 = 1
+        LOCAL:13 = 1
+        LOCAL:14 = 3
+        LOCAL:16 = 3
+    CASE RACE_DWARF
+        LOCAL:10 = 1
+        LOCAL:11 = 1
+        LOCAL:12 = 3
+        LOCAL:13 = 1
+        LOCAL:14 = 2
+        LOCAL:15 = 4
+        LOCAL:16 = 3
+    CASE RACE_ORC
+        LOCAL:10 = 2
+        LOCAL:11 = 3
+        LOCAL:12 = 4
+        LOCAL:13 = 1
+        LOCAL:14 = 1
+        LOCAL:15 = 3
+        LOCAL:16 = 1
+    CASE RACE_DRAGONEWT
+        LOCAL:10 = 2
+        LOCAL:11 = 2
+        LOCAL:12 = 3
+        LOCAL:13 = 2
+        LOCAL:14 = 4
+        LOCAL:15 = 4
+        LOCAL:16 = 2
+    CASE RACE_HARPY
+        LOCAL:10 = 4
+        LOCAL:11 = 4
+        LOCAL:12 = 2
+        LOCAL:13 = 2
+        LOCAL:14 = 2
+        LOCAL:15 = 1
+        LOCAL:16 = 1
+    CASE RACE_LAMIA
+        LOCAL:10 = 2
+        LOCAL:11 = 2
+        LOCAL:12 = 2
+        LOCAL:13 = 3
+        LOCAL:14 = 4
+        LOCAL:15 = 2
+        LOCAL:16 = 3
+    CASEELSE
+        ; 未設定時回退人類
+        CFLAG:(LOCAL:0):CF_RACE = RACE_HUMAN
+ENDSELECT
+
+; 職業加成
+SELECTCASE LOCAL:2
+    CASE JOB_PALADIN
+        LOCAL:15 += 2
+        LOCAL:16 += 1
+        LOCAL:10 -= 1
+    CASE JOB_MAGE
+        LOCAL:13 += 2
+        LOCAL:14 += 1
+        LOCAL:12 -= 1
+    CASE JOB_MERCHANT
+        LOCAL:10 += 1
+        LOCAL:11 += 1
+        LOCAL:14 += 1
+    CASE JOB_BLACKSMITH
+        LOCAL:12 += 1
+        LOCAL:15 += 2
+        LOCAL:10 -= 1
+    CASE JOB_HUNTER
+        LOCAL:10 += 1
+        LOCAL:11 += 2
+        LOCAL:16 -= 1
+    CASE JOB_WARRIOR
+        LOCAL:12 += 2
+        LOCAL:15 += 1
+        LOCAL:13 -= 1
+    CASE JOB_ASSASSIN
+        LOCAL:10 += 2
+        LOCAL:11 += 2
+        LOCAL:15 -= 1
+        LOCAL:16 -= 1
+    CASE JOB_DIVINER
+        LOCAL:13 += 1
+        LOCAL:14 += 2
+        LOCAL:15 -= 1
+    CASEELSE
+        CFLAG:(LOCAL:0):CF_JOB = JOB_WARRIOR
+ENDSELECT
+
+; Clamp 到 1~5
+LOCAL:10 = LIMIT(LOCAL:10, 1, 5)
+LOCAL:11 = LIMIT(LOCAL:11, 1, 5)
+LOCAL:12 = LIMIT(LOCAL:12, 1, 5)
+LOCAL:13 = LIMIT(LOCAL:13, 1, 5)
+LOCAL:14 = LIMIT(LOCAL:14, 1, 5)
+LOCAL:15 = LIMIT(LOCAL:15, 1, 5)
+LOCAL:16 = LIMIT(LOCAL:16, 1, 5)
+
+; 速度換算：1=10,2=15,3=20,4=25,5=35
+BASE:(LOCAL:0):BTL_SPEED = 10
+IF LOCAL:10 == 2
+    BASE:(LOCAL:0):BTL_SPEED = 15
+ELSEIF LOCAL:10 == 3
+    BASE:(LOCAL:0):BTL_SPEED = 20
+ELSEIF LOCAL:10 == 4
+    BASE:(LOCAL:0):BTL_SPEED = 25
+ELSEIF LOCAL:10 >= 5
+    BASE:(LOCAL:0):BTL_SPEED = 35
+ENDIF
+
+; 暴擊換算：1=3,2=5,3=8,4=12,5=20
+BASE:(LOCAL:0):BTL_CRIT = 3
+IF LOCAL:11 == 2
+    BASE:(LOCAL:0):BTL_CRIT = 5
+ELSEIF LOCAL:11 == 3
+    BASE:(LOCAL:0):BTL_CRIT = 8
+ELSEIF LOCAL:11 == 4
+    BASE:(LOCAL:0):BTL_CRIT = 12
+ELSEIF LOCAL:11 >= 5
+    BASE:(LOCAL:0):BTL_CRIT = 20
+ENDIF
+
+; 攻防換算：1=5,2=10,3=15,4=20,5=25
+BASE:(LOCAL:0):BTL_PATK = LOCAL:12 * 5
+BASE:(LOCAL:0):BTL_MATK = LOCAL:13 * 5
+BASE:(LOCAL:0):BTL_SATK = LOCAL:14 * 5
+BASE:(LOCAL:0):BTL_PDEF = LOCAL:15 * 5
+BASE:(LOCAL:0):BTL_MDEF = LOCAL:16 * 5
+RETURN
+
 @TITLE_SCREEN
 $TITLE_TOP
 DRAWLINE
@@ -440,7 +596,10 @@ ENDIF
 LOCAL:11 = CHARANUM - 1
 CFLAG:(LOCAL:11):CF_IS_RESIDENT = 0
 CFLAG:(LOCAL:11):CF_ROOM_SLOT = 9999
-PRINTFORML %CALLNAME:(LOCAL:11)% 已加入基地。
+CFLAG:(LOCAL:11):CF_RACE = 1 + RAND:8
+CFLAG:(LOCAL:11):CF_JOB = 1 + RAND:8
+CALL INIT_CHARA_STATS, LOCAL:11
+PRINTFORML %CALLNAME:(LOCAL:11)% 已加入基地（種族 {CFLAG:(LOCAL:11):CF_RACE} / 職業 {CFLAG:(LOCAL:11):CF_JOB}）。
 RETURN
 
 @SYS_RECOVER
