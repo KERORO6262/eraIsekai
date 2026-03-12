@@ -72,6 +72,8 @@
 ---
 
 ## 2. ITEM.csv 規劃：卡牌定義為道具 ID，映射技能用 Skill ID
+> ⚠️ **Warning**：注意：受限於 Emuera 引擎原生設計，Item.csv 僅能儲存 ID 與名稱。卡牌的戰鬥數值（能量、攻擊力等）絕對不可依賴 CSV，必須統一透過 SYSTEM.ERB 中的 @INIT_CARD_DATA 初始化 CARD_ENERGY_COST 等全域陣列來管理與調用。
+
 ### 2.1 欄位建議（最小可用版）
 | 欄位 | 型態 | 必填 | 說明 |
 |---|---|---|---|

@@ -30,6 +30,7 @@ FLAG:BASE_FAC_LV_LOUNGE = 1
 FLAG:BASE_FAC_LV_ROOM = 1
 
 CALL INIT_ROOM_OWNER
+CALL INIT_WORK_QUEUE
 CALL INIT_CARD_DATA
 
 ; 當日流程保護旗標
@@ -40,6 +41,14 @@ RETURN
 @INIT_ROOM_OWNER
 FOR LOCAL, 0, ROOM_OWNER_MAX - 1
     ROOM_OWNER:LOCAL = -1
+NEXT
+RETURN
+
+@INIT_WORK_QUEUE
+; 工坊生產佇列初始化
+FOR LOCAL, 0, WORK_Q_MAX
+    WORK_Q_TYPE:LOCAL = 0
+    WORK_Q_REMAIN:LOCAL = 0
 NEXT
 RETURN
 
@@ -130,55 +139,86 @@ IF TFLAG:MORNING_DONE == 0
     LOCAL:24 = 0
     LOCAL:25 = 0
 
-    ; 設施產出：工坊提供金錢/材料，訓練室與休息室提供少量補給回補
-    LOCAL:20 = 40 + FLAG:BASE_FAC_LV_WORK * 60
-    LOCAL:21 = 8 + FLAG:BASE_FAC_LV_WORK * 6
-    LOCAL:22 = FLAG:BASE_FAC_LV_TRAIN * 2 + FLAG:BASE_FAC_LV_LOUNGE * 3
+    ; 首日保護：DAY 1 晨間不執行設施產出與維護費結算
+    IF FLAG:BASE_DAY > 1
+        ; 設施產出：工坊提供金錢/材料，訓練室與休息室提供少量補給回補
+        LOCAL:20 = 40 + FLAG:BASE_FAC_LV_WORK * 60
+        LOCAL:21 = 8 + FLAG:BASE_FAC_LV_WORK * 6
+        LOCAL:22 = FLAG:BASE_FAC_LV_TRAIN * 2 + FLAG:BASE_FAC_LV_LOUNGE * 3
 
-    FLAG:RES_MONEY += LOCAL:20
-    FLAG:RES_MATERIAL += LOCAL:21
-    FLAG:RES_SUPPLY += LOCAL:22
+        FLAG:RES_MONEY += LOCAL:20
+        FLAG:RES_MATERIAL += LOCAL:21
+        FLAG:RES_SUPPLY += LOCAL:22
 
-    ; 維護費結算：優先扣補給，不足再扣金錢
-    LOCAL:10 = FLAG:BASE_FAC_LV_ROOM
-    IF LOCAL:10 < 0
-        LOCAL:10 = 0
-    ELSEIF LOCAL:10 > ROOM_OWNER_MAX
-        LOCAL:10 = ROOM_OWNER_MAX
+        ; 維護費結算：優先扣補給，不足再扣金錢
+        LOCAL:10 = FLAG:BASE_FAC_LV_ROOM
+        IF LOCAL:10 < 0
+            LOCAL:10 = 0
+        ELSEIF LOCAL:10 > ROOM_OWNER_MAX
+            LOCAL:10 = ROOM_OWNER_MAX
+        ENDIF
+
+        FOR LOCAL, 0, LOCAL:10
+            IF ROOM_OWNER:LOCAL == -1
+                CONTINUE
+            ENDIF
+
+            LOCAL:1 = ROOM_OWNER:LOCAL
+            LOCAL:2 = 3
+            ; 房間等級折扣：每級 -5%，最多折扣至 50%
+            LOCAL:7 = FLAG:BASE_FAC_LV_ROOM * 5
+            IF LOCAL:7 > 50
+                LOCAL:7 = 50
+            ENDIF
+            LOCAL:2 = LOCAL:2 * (100 - LOCAL:7) / 100
+            LOCAL:3 = CFLAG:(LOCAL:1):CF_MAINT_COST_MOD
+            LOCAL:2 = LOCAL:2 + LOCAL:2 * LOCAL:3 / 100
+            IF LOCAL:2 < 1
+                LOCAL:2 = 1
+            ENDIF
+
+            LOCAL:4 = LOCAL:2
+            IF FLAG:RES_SUPPLY >= LOCAL:4
+                FLAG:RES_SUPPLY -= LOCAL:4
+                LOCAL:23 += LOCAL:4
+                CONTINUE
+            ENDIF
+
+            LOCAL:5 = LOCAL:4 - FLAG:RES_SUPPLY
+            LOCAL:23 += FLAG:RES_SUPPLY
+            FLAG:RES_SUPPLY = 0
+
+            LOCAL:6 = LOCAL:5 * 12
+            IF FLAG:RES_MONEY >= LOCAL:6
+                FLAG:RES_MONEY -= LOCAL:6
+                LOCAL:24 += LOCAL:6
+            ELSE
+                LOCAL:24 += FLAG:RES_MONEY
+                FLAG:RES_MONEY = 0
+                LOCAL:25 += 1
+            ENDIF
+        NEXT
     ENDIF
 
-    FOR LOCAL, 0, LOCAL:10
-        IF ROOM_OWNER:LOCAL == -1
-            CONTINUE
-        ENDIF
-
-        LOCAL:1 = ROOM_OWNER:LOCAL
-        LOCAL:2 = 3
-        LOCAL:3 = CFLAG:(LOCAL:1):CF_MAINT_COST_MOD
-        LOCAL:2 = LOCAL:2 + LOCAL:2 * LOCAL:3 / 100
-        IF LOCAL:2 < 1
-            LOCAL:2 = 1
-        ENDIF
-
-        LOCAL:4 = LOCAL:2
-        IF FLAG:RES_SUPPLY >= LOCAL:4
-            FLAG:RES_SUPPLY -= LOCAL:4
-            LOCAL:23 += LOCAL:4
-            CONTINUE
-        ENDIF
-
-        LOCAL:5 = LOCAL:4 - FLAG:RES_SUPPLY
-        LOCAL:23 += FLAG:RES_SUPPLY
-        FLAG:RES_SUPPLY = 0
-
-        LOCAL:6 = LOCAL:5 * 12
-        IF FLAG:RES_MONEY >= LOCAL:6
-            FLAG:RES_MONEY -= LOCAL:6
-            LOCAL:24 += LOCAL:6
-        ELSE
-            LOCAL:24 += FLAG:RES_MONEY
-            FLAG:RES_MONEY = 0
-            LOCAL:25 += 1
+    ; 工坊生產佇列推進：晨間天數遞減與完工發放
+    LOCAL:30 = 0
+    LOCAL:31 = 0
+    LOCAL:32 = 0
+    FOR LOCAL, 0, WORK_Q_MAX
+        IF WORK_Q_REMAIN:LOCAL > 0
+            WORK_Q_REMAIN:LOCAL -= 1
+            IF WORK_Q_REMAIN:LOCAL < 0
+                WORK_Q_REMAIN:LOCAL = 0
+            ENDIF
+            IF WORK_Q_REMAIN:LOCAL == 0 && WORK_Q_TYPE:LOCAL != 0
+                LOCAL:31 = WORK_Q_TYPE:LOCAL
+                ITEM:(LOCAL:31) += 1
+                WORK_Q_TYPE:LOCAL = 0
+                LOCAL:30 += 1
+                IF LOCAL:32 == 0
+                    LOCAL:32 = LOCAL:31
+                ENDIF
+            ENDIF
         ENDIF
     NEXT
 
@@ -198,6 +238,13 @@ IF TFLAG:MORNING_DONE == 0
     PRINTFORML 維護扣減：補給 -{LOCAL:23} / 金錢 -{LOCAL:24}
     IF LOCAL:25 > 0
         PRINTFORML [警告] 有 {LOCAL:25} 名入住 NPC 維護費未足額支付！
+    ENDIF
+    IF LOCAL:30 > 0
+        IF LOCAL:30 == 1
+            PRINTFORML [工坊] 製作完成：%ITEMNAME:(LOCAL:32)%
+        ELSE
+            PRINTFORML [工坊] 製作完成：{LOCAL:30} 項（含 %ITEMNAME:(LOCAL:32)%）
+        ENDIF
     ENDIF
     PRINTFORML 當前資源：金錢 {FLAG:RES_MONEY} / 材料 {FLAG:RES_MATERIAL} / 補給 {FLAG:RES_SUPPLY}
     TFLAG:MORNING_DONE = 1
@@ -336,15 +383,31 @@ LOCAL:22 = TFLAG:HAND2
 LOCAL:23 = TFLAG:HAND3
 LOCAL:24 = TFLAG:TEMP_CARD
 
-PRINTFORML [H0] %ITEMNAME:(LOCAL:20)%
-PRINTFORML [H1] %ITEMNAME:(LOCAL:21)%
-PRINTFORML [H2] %ITEMNAME:(LOCAL:22)%
-PRINTFORML [H3] %ITEMNAME:(LOCAL:23)%
+IF LOCAL:20 == 0
+    PRINTL [H0] [空]
+ELSE
+    PRINTFORML [H0] %ITEMNAME:(LOCAL:20)% (Cost:{CARD_ENERGY_COST:(LOCAL:20)} | Pwr:{CARD_BASE_POWER:(LOCAL:20)} | Acc:{CARD_BASE_ACC:(LOCAL:20)}\%)
+ENDIF
+IF LOCAL:21 == 0
+    PRINTL [H1] [空]
+ELSE
+    PRINTFORML [H1] %ITEMNAME:(LOCAL:21)% (Cost:{CARD_ENERGY_COST:(LOCAL:21)} | Pwr:{CARD_BASE_POWER:(LOCAL:21)} | Acc:{CARD_BASE_ACC:(LOCAL:21)}\%)
+ENDIF
+IF LOCAL:22 == 0
+    PRINTL [H2] [空]
+ELSE
+    PRINTFORML [H2] %ITEMNAME:(LOCAL:22)% (Cost:{CARD_ENERGY_COST:(LOCAL:22)} | Pwr:{CARD_BASE_POWER:(LOCAL:22)} | Acc:{CARD_BASE_ACC:(LOCAL:22)}\%)
+ENDIF
+IF LOCAL:23 == 0
+    PRINTL [H3] [空]
+ELSE
+    PRINTFORML [H3] %ITEMNAME:(LOCAL:23)% (Cost:{CARD_ENERGY_COST:(LOCAL:23)} | Pwr:{CARD_BASE_POWER:(LOCAL:23)} | Acc:{CARD_BASE_ACC:(LOCAL:23)}\%)
+ENDIF
 
 IF LOCAL:24 == 0
-    PRINTL [T] Temp: Empty
+    PRINTL [T] Temp: [空]
 ELSE
-    PRINTFORML [T] Temp: %ITEMNAME:(LOCAL:24)%
+    PRINTFORML [T] Temp: %ITEMNAME:(LOCAL:24)% (Cost:{CARD_ENERGY_COST:(LOCAL:24)} | Pwr:{CARD_BASE_POWER:(LOCAL:24)} | Acc:{CARD_BASE_ACC:(LOCAL:24)}\%)
 ENDIF
 
 DRAWLINE
