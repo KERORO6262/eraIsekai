@@ -8,12 +8,11 @@
 │  ├─ GameBase.csv
 │  ├─ VariableSize.csv
 │  ├─ PALAM.csv
-│  ├─ Chara/
-│  │  ├─ Chara00.csv
-│  │  ├─ Chara01.csv
-│  │  └─ Chara02.csv
-│  └─ Item/
-│     └─ Item.csv
+│  ├─ Item.csv
+│  └─ Chara/
+│     ├─ Chara00.csv
+│     ├─ Chara01.csv
+│     └─ Chara02.csv
 ├─ ERB/
 │  ├─ Base/
 │  │  └─ BASE_MANAGEMENT.ERB
@@ -38,10 +37,10 @@
 
 ### CSV/
 - `CSV/Chara/`：所有角色主資料（`CharaXX.csv`）集中管理。
-- `CSV/Item/`：道具相關資料。
-- 系統核心設定檔統一放置於 `CSV/` 根目錄：`GameBase.csv`、`VariableSize.csv`、`PALAM.csv`。
+- 道具核心表 `Item.csv` 放置於 `CSV/` 根目錄。
+- 系統核心設定檔統一放置於 `CSV/` 根目錄：`GameBase.csv`、`VariableSize.csv`、`PALAM.csv`、`Item.csv`。
 
-> ⚠️ **Warning**：受限於 Emuera 引擎底層寫死的讀取邏輯，系統核心設定檔（GameBase.csv, VariableSize.csv, PALAM.csv）絕對不可放入子目錄，必須直接放置於 CSV/ 根目錄下，否則引擎將無法讀取並導致陣列越界等崩潰。
+> ⚠️ **Warning**：受限於 Emuera 引擎底層寫死的讀取邏輯，系統核心設定檔（GameBase.csv, VariableSize.csv, PALAM.csv, Item.csv）絕對不可放入子目錄，必須直接放置於 CSV/ 根目錄下，否則引擎將無法讀取並導致陣列越界等崩潰。
 
 ### ERB/
 - `ERB/System/`：主系統入口、共用常數、全域流程控制（如 `SYSTEM.ERB`, `ERH.ERH`）。
@@ -53,7 +52,7 @@
 
 ## Emuera 載入規則提醒
 - Emuera 對一般資料檔（例如角色、道具）可讀取 `CSV/` 下子目錄。
-- 但 `GameBase.csv`、`VariableSize.csv`、`PALAM.csv` 屬於歷史遺留的系統核心表，路徑解析為特例，需固定在 `CSV/` 根目錄。
+- 但 `GameBase.csv`、`VariableSize.csv`、`PALAM.csv`、`Item.csv` 屬於歷史遺留的系統核心表，路徑解析為特例，需固定在 `CSV/` 根目錄。
 - 若誤放至 `CSV/System/` 等子資料夾，會出現 `GameBase 未定義`、`BASE 陣列越界` 等啟動期錯誤。
 
 ## 本次重構搬移對應（舊路徑 -> 新路徑）
@@ -63,7 +62,7 @@
 - `CSV/Chara00.csv` -> `CSV/Chara/Chara00.csv`
 - `CSV/Chara01.csv` -> `CSV/Chara/Chara01.csv`
 - `CSV/Chara02.csv` -> `CSV/Chara/Chara02.csv`
-- `CSV/Item.csv` -> `CSV/Item/Item.csv`
+- `CSV/Item/Item.csv` -> `CSV/Item.csv`
 - `ERB/SYSTEM.ERB` -> `ERB/System/SYSTEM.ERB`
 - `ERB/ERH.ERH` -> `ERB/System/ERH.ERH`
 - `ERB/BASE_MANAGEMENT.ERB` -> `ERB/Base/BASE_MANAGEMENT.ERB`
