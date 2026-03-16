@@ -1,6 +1,6 @@
 # Project_Structure.md
 
-## 專案目錄結構（重構後）
+## 專案目錄結構（模組化重構版）
 
 ```text
 /
@@ -16,54 +16,81 @@
 ├─ ERB/
 │  ├─ Base/
 │  │  └─ BASE_MANAGEMENT.ERB
+│  ├─ Battle/
+│  │  └─ BATTLE_MAIN.ERB
 │  └─ System/
 │     ├─ ERH.ERH
-│     └─ SYSTEM.ERB
+│     ├─ SYSTEM.ERB
+│     └─ DEBUG_MENU.ERB
 ├─ Docs/
-│  ├─ System_Config.md
-│  ├─ Base_Management.md
 │  ├─ Battle_System.md
-│  ├─ Core Loop.md
+│  ├─ Base_Management.md
 │  ├─ Data_Structure.md
+│  ├─ System_Config.md
+│  ├─ Core Loop.md
 │  ├─ Interaction_System.md
-│  ├─ Kojo_Standard.md
 │  ├─ Progression_Balance.md
 │  ├─ UI_Layout.md
-│  └─ ...（其餘授權與引擎說明文件）
+│  └─ ...（授權與引擎說明）
 └─ 其他執行與設定檔
 ```
 
-## 分類規範
+---
 
-### CSV/
-- `CSV/Chara/`：所有角色主資料（`CharaXX.csv`）集中管理。
-- 道具核心表 `Item.csv` 放置於 `CSV/` 根目錄。
-- 系統核心設定檔統一放置於 `CSV/` 根目錄：`GameBase.csv`、`VariableSize.csv`、`PALAM.csv`、`Item.csv`。
+## 目錄責任切分（Single Responsibility）
 
-> ⚠️ **Warning**：受限於 Emuera 引擎底層寫死的讀取邏輯，系統核心設定檔（GameBase.csv, VariableSize.csv, PALAM.csv, Item.csv）絕對不可放入子目錄，必須直接放置於 CSV/ 根目錄下，否則引擎將無法讀取並導致陣列越界等崩潰。
+### `ERB/System/`
+**職責：系統層主循環與初始化。**
 
-### ERB/
-- `ERB/System/`：主系統入口、共用常數、全域流程控制（如 `SYSTEM.ERB`, `ERH.ERH`）。
-- `ERB/Base/`：基地、房間管理、設施互動等基地域邏輯。
+- `SYSTEM.ERB`
+  - 進入點 `@EVENTFIRST`
+  - 日/夜階段推進、基地流程跳轉
+  - `@INIT_BASE_STATE` / `@INIT_SKILL_DATA` 等初始化
+- `ERH.ERH`
+  - 全域常數與索引註冊（`#DEFINE`）
+  - 全域資料陣列配置（`#DIM`）
 
-### Docs/
-- 原 `read me/` 統一改為 `Docs/`。
-- 所有設計規格、平衡筆記、引擎與授權文件統一置於 `Docs/`，避免根目錄分散。
+### `ERB/Battle/`
+**職責：戰鬥域完整封裝。**
 
-## Emuera 載入規則提醒
-- Emuera 對一般資料檔（例如角色、道具）可讀取 `CSV/` 下子目錄。
-- 但 `GameBase.csv`、`VariableSize.csv`、`PALAM.csv`、`Item.csv` 屬於歷史遺留的系統核心表，路徑解析為特例，需固定在 `CSV/` 根目錄。
-- 若誤放至 `CSV/System/` 等子資料夾，會出現 `GameBase 未定義`、`BASE 陣列越界` 等啟動期錯誤。
+- `BATTLE_MAIN.ERB`（核心）
+  - 戰鬥主循環與入口：`@BATTLE_ENTER`, `@BATTLE_UI_MAIN`
+  - UI 勾選邏輯：`TFLAG:UI_HAND0_SEL~UI_TEMP_SEL`
+  - Temp 槽操作：每回合一次存/取與交換、精確單選防呆
+  - 同色堆疊計算：`@BATTLE_CALC_BOOST`（寫入 `TFLAG:TEMP_BUFF_*`）
+  - 技能配方映射：`@BATTLE_MATCH_SKILL`（對 `SKILL_REQ_*` 做 `>=` 比對）
+  - 出招結算與清理：`@BATTLE_PROCESS_ACTION`
 
-## 本次重構搬移對應（舊路徑 -> 新路徑）
-- `CSV/System/GameBase.csv` -> `CSV/GameBase.csv`
-- `CSV/System/VariableSize.csv` -> `CSV/VariableSize.csv`
-- `CSV/System/PALAM.Csv` -> `CSV/PALAM.csv`
-- `CSV/Chara00.csv` -> `CSV/Chara/Chara00.csv`
-- `CSV/Chara01.csv` -> `CSV/Chara/Chara01.csv`
-- `CSV/Chara02.csv` -> `CSV/Chara/Chara02.csv`
-- `CSV/Item/Item.csv` -> `CSV/Item.csv`
-- `ERB/SYSTEM.ERB` -> `ERB/System/SYSTEM.ERB`
-- `ERB/ERH.ERH` -> `ERB/System/ERH.ERH`
-- `ERB/BASE_MANAGEMENT.ERB` -> `ERB/Base/BASE_MANAGEMENT.ERB`
-- `read me/` -> `Docs/`
+> 模組化目標：所有 `@BATTLE_` 函式集中在 `ERB/Battle/`，避免 `SYSTEM.ERB` 膨脹，並降低跨功能改動的耦合風險。
+
+### `ERB/Base/`
+**職責：基地管理域。**
+
+- `BASE_MANAGEMENT.ERB`
+  - 訓練室 / 工坊 / 休息室 / 房間槽位管理
+  - 與戰鬥透過流程呼叫銜接，不直接承擔戰鬥結算細節
+
+---
+
+## 載入與依賴原則
+
+1. **資料定義先於功能使用**
+   - `ERH.ERH` 的 `#DEFINE` / `#DIM` 必須覆蓋戰鬥與基地所需索引。
+2. **流程層呼叫、模組層實作**
+   - `SYSTEM.ERB` 只做 `CALL BATTLE_ENTER` 等流程路由。
+   - `BATTLE_MAIN.ERB` 才實作戰鬥細節。
+3. **文件與程式碼同步更新**
+   - 戰鬥規則改動時，同步更新 `Docs/Battle_System.md` 與 `Docs/Data_Structure.md`。
+
+---
+
+## CSV 路徑提醒（Emuera 特例）
+
+以下核心表 **必須** 放在 `CSV/` 根目錄：
+- `GameBase.csv`
+- `VariableSize.csv`
+- `PALAM.csv`
+- `Item.csv`
+
+若誤放進子資料夾，可能造成啟動期解析錯誤（如核心變數未定義、陣列越界）。
+
