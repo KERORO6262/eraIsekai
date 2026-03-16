@@ -720,6 +720,11 @@ ELSEIF RESULT == 450
     TFLAG:TEMP_USED_THIS_TURN = 1
     GOTO BATTLE_UI_MAIN_LOOP
 ELSEIF RESULT == 430
+    CALL BATTLE_PROCESS_ACTION
+    IF RESULT == 0
+        GOTO BATTLE_UI_MAIN_LOOP
+    ENDIF
+
     TFLAG:BATTLE_TURN += 1
     CALL BATTLE_DRAW_CARDS
     GOTO BATTLE_UI_MAIN_LOOP
@@ -728,6 +733,117 @@ ELSEIF RESULT == 0
 ELSE
     GOTO BATTLE_UI_MAIN_LOOP
 ENDIF
+
+
+@BATTLE_PROCESS_ACTION
+; 被選取元素計數：物理、魔法、防禦、特殊、總數
+LOCAL:50 = 0
+LOCAL:51 = 0
+LOCAL:52 = 0
+LOCAL:53 = 0
+LOCAL:54 = 0
+
+; H0
+IF TFLAG:UI_HAND0_SEL == 1 && TFLAG:HAND0 != 0
+    LOCAL:54 += 1
+    SELECTCASE TFLAG:HAND0
+        CASE ELEM_PHYS
+            LOCAL:50 += 1
+        CASE ELEM_MAG
+            LOCAL:51 += 1
+        CASE ELEM_DEF
+            LOCAL:52 += 1
+        CASE ELEM_SPEC
+            LOCAL:53 += 1
+    ENDSELECT
+ENDIF
+
+; H1
+IF TFLAG:UI_HAND1_SEL == 1 && TFLAG:HAND1 != 0
+    LOCAL:54 += 1
+    SELECTCASE TFLAG:HAND1
+        CASE ELEM_PHYS
+            LOCAL:50 += 1
+        CASE ELEM_MAG
+            LOCAL:51 += 1
+        CASE ELEM_DEF
+            LOCAL:52 += 1
+        CASE ELEM_SPEC
+            LOCAL:53 += 1
+    ENDSELECT
+ENDIF
+
+; H2
+IF TFLAG:UI_HAND2_SEL == 1 && TFLAG:HAND2 != 0
+    LOCAL:54 += 1
+    SELECTCASE TFLAG:HAND2
+        CASE ELEM_PHYS
+            LOCAL:50 += 1
+        CASE ELEM_MAG
+            LOCAL:51 += 1
+        CASE ELEM_DEF
+            LOCAL:52 += 1
+        CASE ELEM_SPEC
+            LOCAL:53 += 1
+    ENDSELECT
+ENDIF
+
+; H3
+IF TFLAG:UI_HAND3_SEL == 1 && TFLAG:HAND3 != 0
+    LOCAL:54 += 1
+    SELECTCASE TFLAG:HAND3
+        CASE ELEM_PHYS
+            LOCAL:50 += 1
+        CASE ELEM_MAG
+            LOCAL:51 += 1
+        CASE ELEM_DEF
+            LOCAL:52 += 1
+        CASE ELEM_SPEC
+            LOCAL:53 += 1
+    ENDSELECT
+ENDIF
+
+; Temp
+IF TFLAG:UI_TEMP_SEL == 1 && TFLAG:TEMP_CARD != 0
+    LOCAL:54 += 1
+    SELECTCASE TFLAG:TEMP_CARD
+        CASE ELEM_PHYS
+            LOCAL:50 += 1
+        CASE ELEM_MAG
+            LOCAL:51 += 1
+        CASE ELEM_DEF
+            LOCAL:52 += 1
+        CASE ELEM_SPEC
+            LOCAL:53 += 1
+    ENDSELECT
+ENDIF
+
+IF LOCAL:54 == 0
+    PRINTW 請至少選取一個元素來發動攻擊！
+    RETURN 0
+ENDIF
+
+PRINTFORML 【元素共鳴】發動！選取了 {LOCAL:50} 個物理，{LOCAL:51} 個魔法，{LOCAL:52} 個防禦，{LOCAL:53} 個特殊。
+PRINTL (開發中提示：此處將給予臨時屬性 Buff)
+
+; 消耗被選取元素
+IF TFLAG:UI_HAND0_SEL == 1
+    TFLAG:HAND0 = 0
+ENDIF
+IF TFLAG:UI_HAND1_SEL == 1
+    TFLAG:HAND1 = 0
+ENDIF
+IF TFLAG:UI_HAND2_SEL == 1
+    TFLAG:HAND2 = 0
+ENDIF
+IF TFLAG:UI_HAND3_SEL == 1
+    TFLAG:HAND3 = 0
+ENDIF
+IF TFLAG:UI_TEMP_SEL == 1
+    TFLAG:TEMP_CARD = 0
+ENDIF
+
+RETURN 1
 
 
 @TEST_ADD_RANDOM_NPC
