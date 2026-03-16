@@ -1,0 +1,237 @@
+; 職責：每日流程狀態機（晨間、日間、晚間）與流程保底處理。
+@GAME_LOOP
+; ===== 每日主循環入口 =====
+WHILE 1
+    IF FLAG:DAY_PHASE == 1
+        CALL PHASE_MORNING
+    ELSEIF FLAG:DAY_PHASE == 2
+        CALL PHASE_DAY
+    ELSEIF FLAG:DAY_PHASE == 3
+        CALL PHASE_NIGHT
+    ELSE
+        CALL SYS_RECOVER
+    ENDIF
+WEND
+RETURN
+
+@PHASE_MORNING
+DRAWLINE
+PRINTFORML 【第{FLAG:BASE_DAY}天／晨間】
+IF TFLAG:MORNING_DONE == 0
+    LOCAL:20 = 0
+    LOCAL:21 = 0
+    LOCAL:22 = 0
+    LOCAL:23 = 0
+    LOCAL:24 = 0
+    LOCAL:25 = 0
+
+    ; 首日保護：DAY 1 晨間不執行設施產出與維護費結算
+    IF FLAG:BASE_DAY > 1
+        ; 設施產出：工坊提供金錢/材料，訓練室與休息室提供少量補給回補
+        LOCAL:20 = 40 + FLAG:BASE_FAC_LV_WORK * 60
+        LOCAL:21 = 8 + FLAG:BASE_FAC_LV_WORK * 6
+        LOCAL:22 = FLAG:BASE_FAC_LV_TRAIN * 2 + FLAG:BASE_FAC_LV_LOUNGE * 3
+
+        FLAG:RES_MONEY += LOCAL:20
+        FLAG:RES_MATERIAL += LOCAL:21
+        FLAG:RES_SUPPLY += LOCAL:22
+
+        ; 維護費結算：優先扣補給，不足再扣金錢
+        LOCAL:10 = FLAG:BASE_FAC_LV_ROOM
+        IF LOCAL:10 < 0
+            LOCAL:10 = 0
+        ELSEIF LOCAL:10 > ROOM_OWNER_MAX
+            LOCAL:10 = ROOM_OWNER_MAX
+        ENDIF
+
+        FOR LOCAL, 0, LOCAL:10
+            IF ROOM_OWNER:LOCAL == -1
+                CONTINUE
+            ENDIF
+
+            LOCAL:1 = ROOM_OWNER:LOCAL
+            LOCAL:2 = 3
+            ; 房間等級折扣：每級 -5%，最多折扣至 50%
+            LOCAL:7 = FLAG:BASE_FAC_LV_ROOM * 5
+            IF LOCAL:7 > 50
+                LOCAL:7 = 50
+            ENDIF
+            LOCAL:2 = LOCAL:2 * (100 - LOCAL:7) / 100
+            LOCAL:3 = CFLAG:(LOCAL:1):CF_MAINT_COST_MOD
+            LOCAL:2 = LOCAL:2 + LOCAL:2 * LOCAL:3 / 100
+            IF LOCAL:2 < 1
+                LOCAL:2 = 1
+            ENDIF
+
+            LOCAL:4 = LOCAL:2
+            IF FLAG:RES_SUPPLY >= LOCAL:4
+                FLAG:RES_SUPPLY -= LOCAL:4
+                LOCAL:23 += LOCAL:4
+                CONTINUE
+            ENDIF
+
+            LOCAL:5 = LOCAL:4 - FLAG:RES_SUPPLY
+            LOCAL:23 += FLAG:RES_SUPPLY
+            FLAG:RES_SUPPLY = 0
+
+            LOCAL:6 = LOCAL:5 * 12
+            IF FLAG:RES_MONEY >= LOCAL:6
+                FLAG:RES_MONEY -= LOCAL:6
+                LOCAL:24 += LOCAL:6
+            ELSE
+                LOCAL:24 += FLAG:RES_MONEY
+                FLAG:RES_MONEY = 0
+                LOCAL:25 += 1
+            ENDIF
+        NEXT
+    ENDIF
+
+    ; 工坊生產佇列推進：晨間天數遞減與完工發放
+    LOCAL:30 = 0
+    LOCAL:31 = 0
+    LOCAL:32 = 0
+    FOR LOCAL, 0, WORK_Q_MAX
+        IF WORK_Q_REMAIN:LOCAL > 0
+            WORK_Q_REMAIN:LOCAL -= 1
+            IF WORK_Q_REMAIN:LOCAL < 0
+                WORK_Q_REMAIN:LOCAL = 0
+            ENDIF
+            IF WORK_Q_REMAIN:LOCAL == 0 && WORK_Q_TYPE:LOCAL != 0
+                LOCAL:31 = WORK_Q_TYPE:LOCAL
+                ITEM:(LOCAL:31) += 1
+                WORK_Q_TYPE:LOCAL = 0
+                LOCAL:30 += 1
+                IF LOCAL:32 == 0
+                    LOCAL:32 = LOCAL:31
+                ENDIF
+            ENDIF
+        ENDIF
+    NEXT
+
+    ; 防呆：資源不可低於 0
+    IF FLAG:RES_MONEY < 0
+        FLAG:RES_MONEY = 0
+    ENDIF
+    IF FLAG:RES_MATERIAL < 0
+        FLAG:RES_MATERIAL = 0
+    ENDIF
+    IF FLAG:RES_SUPPLY < 0
+        FLAG:RES_SUPPLY = 0
+    ENDIF
+
+    PRINTL --- 晨報 ---
+    PRINTFORML 設施收益：金錢 +{LOCAL:20} / 材料 +{LOCAL:21} / 補給 +{LOCAL:22}
+    PRINTFORML 維護扣減：補給 -{LOCAL:23} / 金錢 -{LOCAL:24}
+    IF LOCAL:25 > 0
+        PRINTFORML [警告] 有 {LOCAL:25} 名入住 NPC 維護費未足額支付！
+    ENDIF
+    IF LOCAL:30 > 0
+        IF LOCAL:30 == 1
+            PRINTFORML [工坊] 製作完成：%ITEMNAME:(LOCAL:32)%
+        ELSE
+            PRINTFORML [工坊] 製作完成：{LOCAL:30} 項（含 %ITEMNAME:(LOCAL:32)%）
+        ENDIF
+    ENDIF
+    PRINTFORML 當前資源：金錢 {FLAG:RES_MONEY} / 材料 {FLAG:RES_MATERIAL} / 補給 {FLAG:RES_SUPPLY}
+    TFLAG:MORNING_DONE = 1
+ENDIF
+PRINTL [1] 開始日間
+INPUT RESULT
+IF RESULT == 1
+    FLAG:DAY_PHASE = 2
+ENDIF
+RETURN
+
+@PHASE_DAY
+$PHASE_DAY_MENU
+DRAWLINE
+PRINTFORML 【第{FLAG:BASE_DAY}天／日間】
+PRINTL [1] 基地管理
+PRINTL [2] 進入戰鬥（暫定）
+PRINTL [9] 結束日間
+INPUT RESULT
+
+IF RESULT == 1
+    CALL BASE_MENU
+    GOTO PHASE_DAY_MENU
+ELSEIF RESULT == 2
+    TFLAG:RETURN_PHASE = 2
+    CALL BATTLE_ENTER
+    GOTO PHASE_DAY_MENU
+ELSEIF RESULT == 9
+    FLAG:DAY_PHASE = 3
+ENDIF
+RETURN
+
+@PHASE_NIGHT
+$PHASE_NIGHT_MENU
+DRAWLINE
+PRINTFORML 【第{FLAG:BASE_DAY}天／晚間】
+PRINTL [1] 晚間行動（暫定）
+PRINTL [2] 進入戰鬥（暫定）
+PRINTL [9] 就寢
+INPUT RESULT
+
+IF RESULT == 1
+    PRINTL 你完成了晚間整備。
+    GOTO PHASE_NIGHT_MENU
+ELSEIF RESULT == 2
+    TFLAG:RETURN_PHASE = 3
+    CALL BATTLE_ENTER
+    GOTO PHASE_NIGHT_MENU
+ELSEIF RESULT == 9
+    ; 日末數值結算：入住 NPC 疲勞自然下降，過勞會降低心情
+    LOCAL:10 = FLAG:BASE_FAC_LV_ROOM
+    IF LOCAL:10 < 0
+        LOCAL:10 = 0
+    ELSEIF LOCAL:10 > ROOM_OWNER_MAX
+        LOCAL:10 = ROOM_OWNER_MAX
+    ENDIF
+
+    FOR LOCAL, 0, LOCAL:10
+        IF ROOM_OWNER:LOCAL == -1
+            CONTINUE
+        ENDIF
+
+        LOCAL:1 = ROOM_OWNER:LOCAL
+        LOCAL:2 = CFLAG:(LOCAL:1):CF_FATIGUE
+        LOCAL:3 = 8 + FLAG:BASE_FAC_LV_LOUNGE * 2
+        LOCAL:2 -= LOCAL:3
+        IF LOCAL:2 < 0
+            LOCAL:2 = 0
+        ENDIF
+        CFLAG:(LOCAL:1):CF_FATIGUE = LOCAL:2
+
+        IF LOCAL:2 >= 80
+            CFLAG:(LOCAL:1):CF_MOOD -= 8
+        ELSEIF LOCAL:2 >= 60
+            CFLAG:(LOCAL:1):CF_MOOD -= 3
+        ELSE
+            CFLAG:(LOCAL:1):CF_MOOD += 1
+        ENDIF
+
+        IF CFLAG:(LOCAL:1):CF_MOOD < 0
+            CFLAG:(LOCAL:1):CF_MOOD = 0
+        ELSEIF CFLAG:(LOCAL:1):CF_MOOD > 100
+            CFLAG:(LOCAL:1):CF_MOOD = 100
+        ENDIF
+    NEXT
+
+    CALL TRIGGER_NIGHT_EVENT
+
+    ; 一天結束，推進到隔日晨間
+    FLAG:BASE_DAY += 1
+    FLAG:DAY_PHASE = 1
+    TFLAG:MORNING_DONE = 0
+ENDIF
+RETURN
+
+@SYS_RECOVER
+PRINTL [警告] 偵測到非法 DAY_PHASE，已重置為晨間。
+FLAG:DAY_PHASE = 1
+RETURN
+
+
+@TRIGGER_NIGHT_EVENT
+; 晚間隨機事件擴充入口（預留）
+RETURN
