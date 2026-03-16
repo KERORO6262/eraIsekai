@@ -16,6 +16,8 @@
 ├─ ERB/
 │  ├─ Base/
 │  │  └─ BASE_MANAGEMENT.ERB
+│  ├─ Battle/
+│  │  └─ BATTLE_MAIN.ERB
 │  └─ System/
 │     ├─ ERH.ERH
 │     └─ SYSTEM.ERB
@@ -44,6 +46,7 @@
 
 ### ERB/
 - `ERB/System/`：主系統入口、共用常數、全域流程控制（如 `SYSTEM.ERB`, `ERH.ERH`）。
+- `ERB/Battle/`：戰鬥模組，集中管理所有 `@BATTLE_` 函式、出招結算與技能映射邏輯。
 - `ERB/Base/`：基地、房間管理、設施互動等基地域邏輯。
 
 ### Docs/
