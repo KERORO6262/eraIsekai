@@ -90,6 +90,8 @@
 
 ## 5. 初始化資料（SYSTEM.ERB）
 
+重構後，**全域資料初始化仍由 `ERB/System/SYSTEM.ERB` 負責**（包含 `@INIT_SKILL_DATA`）。
+
 `@INIT_SKILL_DATA` 會先清空 `20000~20010` 的 `SKILL_REQ_*`，再註冊測試技能：
 
 | 技能 ID | 名稱 | `PHYS` | `MAG` | `DEF` | `SPEC` |

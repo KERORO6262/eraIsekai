@@ -21,6 +21,8 @@
 │  └─ System/
 │     ├─ ERH.ERH
 │     ├─ SYSTEM.ERB
+│     ├─ CORE_LOOP.ERB
+│     ├─ CHARA_SYSTEM.ERB
 │     └─ DEBUG_MENU.ERB
 ├─ Docs/
 │  ├─ Battle_System.md
@@ -40,12 +42,22 @@
 ## 目錄責任切分（Single Responsibility）
 
 ### `ERB/System/`
-**職責：系統層主循環與初始化。**
+**職責：系統入口、初始化、流程模組分派。**
 
 - `SYSTEM.ERB`
   - 進入點 `@EVENTFIRST`
-  - 日/夜階段推進、基地流程跳轉
-  - `@INIT_BASE_STATE` / `@INIT_SKILL_DATA` 等初始化
+  - 全域初始化（`@INIT_BASE_STATE` / `@INIT_SKILL_DATA` 等）
+  - 標題選單與開始遊戲路由（`@TITLE_SCREEN`）
+- `CORE_LOOP.ERB`
+  - 每日主循環狀態機（`@GAME_LOOP`）
+  - 晨/日/晚階段流程（`@PHASE_MORNING` / `@PHASE_DAY` / `@PHASE_NIGHT`）
+  - 流程保底與事件鉤子（`@SYS_RECOVER` / `@TRIGGER_NIGHT_EVENT`）
+- `CHARA_SYSTEM.ERB`
+  - 角色基礎數值初始化（`@INIT_CHARA_STATS`）
+  - 種族/職業字串轉換（`@GET_RACE_STR` / `@GET_JOB_STR`）
+- `DEBUG_MENU.ERB`
+  - 開發者除錯選單與測試指令
+  - `@TEST_ADD_RANDOM_NPC` 等 debug helper 集中管理
 - `ERH.ERH`
   - 全域常數與索引註冊（`#DEFINE`）
   - 全域資料陣列配置（`#DIM`）
@@ -77,7 +89,8 @@
 1. **資料定義先於功能使用**
    - `ERH.ERH` 的 `#DEFINE` / `#DIM` 必須覆蓋戰鬥與基地所需索引。
 2. **流程層呼叫、模組層實作**
-   - `SYSTEM.ERB` 只做 `CALL BATTLE_ENTER` 等流程路由。
+   - `SYSTEM.ERB` 只做啟動/初始化與標題流程路由。
+   - `CORE_LOOP.ERB` 才負責 `DAY_PHASE` 的主循環分派。
    - `BATTLE_MAIN.ERB` 才實作戰鬥細節。
 3. **文件與程式碼同步更新**
    - 戰鬥規則改動時，同步更新 `Docs/Battle_System.md` 與 `Docs/Data_Structure.md`。
@@ -93,4 +106,3 @@
 - `Item.csv`
 
 若誤放進子資料夾，可能造成啟動期解析錯誤（如核心變數未定義、陣列越界）。
-
