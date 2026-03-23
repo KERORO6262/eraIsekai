@@ -16,7 +16,7 @@
 
 `@BATTLE_PREPARATION` 為日間/晚間流程銜接戰鬥的前置 UI 入口。
 
-本階段職責為編組出戰隊伍。玩家於介面中勾選本次參戰角色，包含主角自身。現行階段定義為單人出戰規格，`MASTER`（Chara 0）採強制勾選且固定參戰。
+本模組負責編組出戰隊伍。系統以 `PARTY_MEMBERS:0~3` 陣列儲存最多 4 名出戰角色的索引，`-1` 代表空槽位。玩家於介面中勾選本次參戰名單，並以該陣列作為後續戰鬥流程的參戰依據。
 
 ---
 
@@ -114,6 +114,13 @@
 CALL BATTLE_PROCESS_ACTION
 IF RESULT == 0
     GOTO BATTLE_UI_MAIN_LOOP
+ELSEIF RESULT == 1
+    RETURN
+ENDIF
+
+CALL BATTLE_ENEMY_TURN
+IF RESULT == 1
+    RETURN
 ENDIF
 
 TFLAG:BATTLE_TURN += 1
@@ -122,7 +129,8 @@ GOTO BATTLE_UI_MAIN_LOOP
 ```
 
 - `@BATTLE_PROCESS_ACTION` 回傳 `0`：本次出招失敗（通常是沒選任何元素），不推進回合。
-- 回傳 `1`：本次出招成功，才推進回合並抽牌。
+- 回傳 `1`：玩家已直接結束戰鬥（例如擊破敵人），UI 立即返回基地流程。
+- 回傳 `2`：玩家出招成功且敵人仍存活，系統接著進入敵方回合，只有在敵方行動後戰鬥仍持續時才推進回合並抽牌。
 
 ### 3.1 階段一：同色堆疊加成（Stat Boosting）
 
@@ -181,6 +189,14 @@ GOTO BATTLE_UI_MAIN_LOOP
 - 當 `RESULT > 0`，輸出：
   - `【元素共鳴】條件達成！發動技能 ID：{RESULT}！`
 
+### 3.3 敵方行動階段（Enemy Turn）
+
+當玩家出招結算完成且敵人未死亡時，系統會進入敵方回合。
+
+敵方行動邏輯：掃描 `PARTY_MEMBERS:0~3` 中有效且 `BASE:(該角色):BTL_HP > 0` 的目標，建立可被攻擊名單，並以 `RAND` 隨機選取其中一名進行基礎攻擊。若名單為空，視為隊伍全滅並直接結束戰鬥。
+
+敵方基礎攻擊的傷害公式為：`敵方攻擊力 - 防禦方對應屬性DEF`。木人樁反擊採用物理傷害，實作為 `MAX(0, BASE:敵人:BTL_PATK - BASE:目標:BTL_PDEF)`。
+
 ---
 
 ## 6. 防呆與清理機制
@@ -195,8 +211,8 @@ GOTO BATTLE_UI_MAIN_LOOP
 
 ### 4.2 清理順序（成功出招）
 1. 依勾選狀態清空 `HAND0~HAND3`、`TEMP_CARD` 對應槽位。
-2. 回傳 `1`，由 UI 主循環推進回合。
-3. `@BATTLE_DRAW_CARDS` 重置：
+2. 若敵人已被擊破則回傳 `1` 結束戰鬥；若敵人存活則回傳 `2` 並進入敵方回合。
+3. 僅當敵方行動後戰鬥仍持續時，`@BATTLE_DRAW_CARDS` 才重置：
    - `TFLAG:TEMP_USED_THIS_TURN = 0`
    - `TFLAG:UI_HAND0_SEL~UI_TEMP_SEL = 0`
    - `TFLAG:TEMP_BUFF_PATK~TEMP_BUFF_MDEF = 0`
@@ -230,5 +246,6 @@ GOTO BATTLE_UI_MAIN_LOOP
 
 勝敗條件如下：
 - 敵人 `BTL_HP <= 0`：玩家勝利。
-- 玩家 `BTL_HP <= 0`：玩家敗北。
+- 玩家出招後若敵人仍存活，系統進入敵方回合。
+- 敵方回合結束後若 `MASTER`（角色 0）的 `BTL_HP <= 0`：玩家敗北。
 
