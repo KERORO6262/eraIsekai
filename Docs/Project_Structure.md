@@ -47,7 +47,7 @@
 
 | 模組檔案 | 核心職責 | 主要函式 / 內容 |
 |---|---|---|
-| `SYSTEM.ERB` | 遊戲啟動與全域初始化 | `@EVENTFIRST`, `@INIT_BASE_STATE`, `@INIT_SKILL_DATA`, `@TITLE_SCREEN` |
+| `SYSTEM.ERB` | 遊戲啟動與全域初始化路由 | `@EVENTFIRST`, `@INIT_BASE_STATE`, `@TITLE_SCREEN` |
 | `CORE_LOOP.ERB` | 每日流程狀態機與階段推進 | `@GAME_LOOP`, `@PHASE_MORNING`, `@PHASE_DAY`, `@PHASE_NIGHT`, `@SYS_RECOVER`, `@TRIGGER_NIGHT_EVENT` |
 | `CHARA_SYSTEM.ERB` | 角色基礎數值與顯示字串 | `@INIT_CHARA_STATS`, `@GET_RACE_STR`, `@GET_JOB_STR` |
 | `DEBUG_MENU.ERB` | 開發者測試與除錯操作 | `@DEBUG_MAIN_MENU`, `@TEST_ADD_RANDOM_NPC`, NPC/資源編輯流程 |
@@ -85,6 +85,29 @@
    - `BATTLE_MAIN.ERB` 實作戰鬥細節。
 3. **文件與程式碼同步更新**
    - 戰鬥規則改動時，同步更新 `Docs/Battle_System.md` 與 `Docs/Data_Structure.md`。
+
+---
+
+## 長期維護架構規範（Evergreen Architecture Rules）
+
+### 1) 模組邊界與單一職責 (Module Boundaries & SRP)
+- `System`：僅負責啟動、總初始化流程路由與標題流程，不承載基地/戰鬥/角色細節實作。
+- `Core Loop`：僅負責日循環狀態機與時機廣播，不直接處理任何單一領域的底層資料細節。
+- `Base`：負責設施、房間、工坊佇列與基地資源規則。
+- `Battle`：負責戰鬥資料、戰鬥流程、戰鬥結算與技能配方資料。
+- `Chara`：負責角色屬性、狀態與角色日常結算。
+- 依賴方向必須維持為：`System/Core Loop -> Domain Modules(Base/Battle/Chara)`，禁止反向依賴與跨域耦合。
+- **嚴禁跨領域直接操作對方底層陣列**（例如 Core Loop 直接改動 `WORK_Q_REMAIN`）。
+
+### 2) 生命週期委派設計 (Lifecycle Delegation Pattern)
+- 任何全域生命週期節點（如：初始化、晨間/晚間、換日）由核心層負責「呼叫 Hook」。
+- 實際狀態變更由對應子系統負責（例如基地晨間事件在 Base 模組實作，角色晚間結算在 Chara 模組實作）。
+- 新增生命週期行為時，優先擴充既有 Hook，不在 Core Loop 內堆疊領域細節流程。
+
+### 3) 介面命名公約 (API Naming Conventions)
+- 跨模組初始化入口：`@<MODULE>_INIT`（例如 `@BASE_INIT`, `@BATTLE_INIT`）。
+- 跨模組生命週期事件：`@<MODULE>_EVENT_<TIMING>`（例如 `@BASE_EVENT_MORNING`, `@CHARA_EVENT_NIGHT`）。
+- 非跨模組內部輔助函式應保持在模組內命名域，避免對外暴露不必要 API。
 
 ---
 
