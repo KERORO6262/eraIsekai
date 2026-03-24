@@ -106,11 +106,22 @@
 #DEFINE TEMP_BUFF_PDEF 32
 #DEFINE TEMP_BUFF_MDEF 33
 
-; 四象元素常數
-#DEFINE ELEM_PHYS 1    ; 物理
-#DEFINE ELEM_MAG 2     ; 魔法
-#DEFINE ELEM_DEF 3     ; 防禦
-#DEFINE ELEM_SPEC 4    ; 特殊
+; 戰鬥卡牌雙軸常數（Shape + Attribute）
+; 卡牌打包格式：CARD = ATTRIBUTE * CARD_PACK_BASE + SHAPE
+; 範例：[火·物理] = 1*10 + 1 = 11。0 保留為空槽，便於 UI 與 Debug 判讀。
+#DEFINE CARD_PACK_BASE 10
+
+; Shape：只用於技能配方判定
+#DEFINE SHAPE_PHYS 1    ; 物理
+#DEFINE SHAPE_MAG 2     ; 魔法
+#DEFINE SHAPE_DEF 3     ; 防禦
+#DEFINE SHAPE_SPEC 4    ; 特殊
+
+; Attribute：只用於臨時 Buff 判定
+#DEFINE ATTR_FIRE 1     ; 火
+#DEFINE ATTR_WATER 2    ; 水
+#DEFINE ATTR_WIND 3     ; 風
+#DEFINE ATTR_EARTH 4    ; 土
 
 ; 房間槽位 -> NPC 編號（空槽 = -1）
 #DEFINE ROOM_OWNER_MAX 100
@@ -119,11 +130,11 @@
 ; 戰前隊伍編組（空槽 = -1）
 #DIM SAVEDATA PARTY_MEMBERS, 4
 
-; 技能配方資料（SKILL ID 直接映射）
-#DIM SKILL_REQ_PHYS, 30000
-#DIM SKILL_REQ_MAG, 30000
-#DIM SKILL_REQ_DEF, 30000
-#DIM SKILL_REQ_SPEC, 30000
+; 技能配方資料（SKILL ID 直接映射，Shape 軸）
+#DIM SKILL_REQ_SHAPE_PHYS, 30000
+#DIM SKILL_REQ_SHAPE_MAG, 30000
+#DIM SKILL_REQ_SHAPE_DEF, 30000
+#DIM SKILL_REQ_SHAPE_SPEC, 30000
 
 ; 工坊生產佇列（永久保存）
 ; 注意：Emuera 的 #DIM 陣列大小不支援使用 #DEFINE 巨集，必須寫死數字

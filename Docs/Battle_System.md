@@ -1,13 +1,13 @@
 # Battle_System.md
 
-> 系統：四象元素編織回合戰鬥（Element Weaving System）
+> 系統：雙軸卡牌編織回合戰鬥（Attribute + Shape）
 >
 > 入口：`CALL BATTLE_PREPARATION`（於 `ERB/Battle/BATTLE_MAIN.ERB`）
 >
 > 核心：
-> 1) 以元素槽位（非道具卡）組成回合資源；
-> 2) 玩家透過 UI 勾選控制「本回合要消耗的元素」；
-> 3) 先做同色堆疊 Buff，再做技能配方映射，最後清空已選元素。
+> 1) 以雙軸卡牌槽位（非道具卡）組成回合資源；
+> 2) 玩家透過 UI 勾選控制「本回合要消耗的卡牌」；
+> 3) 先用 Attribute 計算 Buff，再用 Shape 進行技能配方映射，最後清空已選卡牌。
 
 ---
 
@@ -38,23 +38,43 @@
 
 ## 3. 戰鬥資料模型總覽
 
-### 1.1 四象元素定義（抽象資源，不是道具）
+### 1.1 卡牌雙軸機制（Shape + Attribute）
 
-| 元素 | 常數 | 數值 | 說明 |
-|---|---:|---:|---|
-| 物理 | `#DEFINE ELEM_PHYS` | `1` | 偏向物理輸出與壓制資源。 |
-| 魔法 | `#DEFINE ELEM_MAG` | `2` | 偏向魔法輸出與法術鏈結資源。 |
-| 防禦 | `#DEFINE ELEM_DEF` | `3` | 偏向護甲/減傷等生存資源。 |
-| 特殊 | `#DEFINE ELEM_SPEC` | `4` | 偏向機制觸發與功能性資源。 |
+每張戰鬥卡牌同時具備兩個維度：
 
-> 設計原則：戰鬥中抽到的是元素編碼（1~4），不再是 `ITEM.csv` 的卡牌實體。這使技能判定回歸「元素配方」而非「單卡 ID」。
+1. **Shape（形狀）**：只負責技能配方判定。
+   - `SHAPE_PHYS`（物理）
+   - `SHAPE_MAG`（魔法）
+   - `SHAPE_DEF`（防禦）
+   - `SHAPE_SPEC`（特殊）
+2. **Attribute（屬性）**：只負責當回合 Buff 計算。
+   - `ATTR_FIRE`（火）→ `TEMP_BUFF_PATK`
+   - `ATTR_WATER`（水）→ `TEMP_BUFF_MATK`
+   - `ATTR_WIND`（風）→ `TEMP_BUFF_PDEF`
+   - `ATTR_EARTH`（土）→ `TEMP_BUFF_MDEF`
+
+> 職責分離原則：**Shape 決定能不能放技能，Attribute 決定放技能時拿到哪些能力加成**。
+
+### 1.2 卡牌編碼與解碼（TFLAG）
+
+`HAND0~HAND3` 與 `TEMP_CARD` 使用整數打包：
+
+`CARD = ATTRIBUTE * 10 + SHAPE`
+
+- `0`：空槽。
+- `11~44`：有效雙軸卡牌。
+- 解碼方式：
+  - `ATTRIBUTE = CARD / 10`
+  - `SHAPE = CARD - ATTRIBUTE*10`
+
+UI 展示格式為：`[屬性·形狀]`，例如 `[火·物理]`、`[水·防禦]`。
 
 ### 1.2 回合槽位模型
 
 | 類型 | 變數 | 說明 |
 |---|---|---|
-| 手牌 H0~H3 | `TFLAG:HAND0` ~ `TFLAG:HAND3` | 當回合主要元素池（4 槽）。 |
-| 暫存槽 Temp | `TFLAG:TEMP_CARD` | 可跨流程操作的額外 1 槽。 |
+| 手牌 H0~H3 | `TFLAG:HAND0` ~ `TFLAG:HAND3` | 當回合主要卡牌池（4 槽，值為 `ATTR*10+SHAPE`）。 |
+| 暫存槽 Temp | `TFLAG:TEMP_CARD` | 可跨流程操作的額外 1 槽（值為 `ATTR*10+SHAPE`）。 |
 | Temp 本回合使用鎖 | `TFLAG:TEMP_USED_THIS_TURN` | `0`=可用，`1`=本回合已使用。 |
 
 ---
@@ -86,17 +106,17 @@
 - 若 `TFLAG:TEMP_USED_THIS_TURN == 1`，直接拒絕並提示：
   - `本回合已操作過暫存槽。`
 
-#### 規則 B：必須「精確選取 1 個手牌元素」
+#### 規則 B：必須「精確選取 1 個手牌卡牌」
 - 系統只統計 H0~H3 中「非空且被勾選」的槽位。
 - 若選取數量 `!= 1`，拒絕並提示：
   - `必須精確選取 1 個手牌元素才能進行暫存操作。`
 
 #### 規則 C：存入 / 交換
 - **Temp 為空 (`TFLAG:TEMP_CARD == 0`)**：
-  - 把被選手牌元素移入 Temp。
+  - 把被選手牌卡牌移入 Temp。
   - 原手牌槽位清空為 `0`。
 - **Temp 非空**：
-  - 與被選手牌元素做雙向交換。
+  - 與被選手牌卡牌做雙向交換。
 
 #### 規則 D：操作成功後清理
 - 清空 `UI_HAND0_SEL~UI_HAND3_SEL` 與 `UI_TEMP_SEL`。
@@ -132,62 +152,68 @@ GOTO BATTLE_UI_MAIN_LOOP
 - 回傳 `1`：玩家已直接結束戰鬥（例如擊破敵人），UI 立即返回基地流程。
 - 回傳 `2`：玩家出招成功且敵人仍存活，系統接著進入敵方回合，只有在敵方行動後戰鬥仍持續時才推進回合並抽牌。
 
-### 3.1 階段一：同色堆疊加成（Stat Boosting）
+### 3.1 階段一：Attribute 堆疊加成（Stat Boosting）
 
-`@BATTLE_PROCESS_ACTION` 會先統計被選元素數量：
-- `LOCAL:50` = 物理數量
-- `LOCAL:51` = 魔法數量
-- `LOCAL:52` = 防禦數量
-- `LOCAL:53` = 特殊數量
+`@BATTLE_PROCESS_ACTION` 會先統計被選卡牌數量：
+- Shape 計數（技能配方用）：
+  - `LOCAL:50` = 物理 Shape
+  - `LOCAL:51` = 魔法 Shape
+  - `LOCAL:52` = 防禦 Shape
+  - `LOCAL:53` = 特殊 Shape
+- Attribute 計數（Buff 用）：
+  - `LOCAL:55` = 火 Attribute
+  - `LOCAL:56` = 水 Attribute
+  - `LOCAL:57` = 風 Attribute
+  - `LOCAL:58` = 土 Attribute
 - `LOCAL:54` = 總選取數
 
 若 `LOCAL:54 == 0`：
-- `PRINTW 請至少選取一個元素來發動攻擊！`
+- `PRINTW 請至少選取一張卡牌來發動攻擊！`
 - `RETURN 0`
 
-接著呼叫 `@BATTLE_CALC_BOOST, ARG:0..ARG:3`，計算公式：
+接著呼叫 `@BATTLE_CALC_BOOST(火, 水, 風, 土)`，計算公式：
 
 | Buff 變數 | 公式 | 說明 |
 |---|---|---|
-| `TFLAG:TEMP_BUFF_PATK` | `ARG:0 * 10` | 每 1 個物理元素給 +10% 臨時物攻。 |
-| `TFLAG:TEMP_BUFF_MATK` | `ARG:1 * 10` | 每 1 個魔法元素給 +10% 臨時魔攻。 |
-| `TFLAG:TEMP_BUFF_PDEF` | `ARG:2 * 10` | 每 1 個防禦元素給 +10% 臨時物防。 |
-| `TFLAG:TEMP_BUFF_MDEF` | `ARG:3 * 10` | 每 1 個特殊元素給 +10% 臨時魔防（現行設計）。 |
+| `TFLAG:TEMP_BUFF_PATK` | `火 * 10` | 每 1 張火屬性卡給 +10% 臨時物攻。 |
+| `TFLAG:TEMP_BUFF_MATK` | `水 * 10` | 每 1 張水屬性卡給 +10% 臨時魔攻。 |
+| `TFLAG:TEMP_BUFF_PDEF` | `風 * 10` | 每 1 張風屬性卡給 +10% 臨時物防。 |
+| `TFLAG:TEMP_BUFF_MDEF` | `土 * 10` | 每 1 張土屬性卡給 +10% 臨時魔防。 |
 
 > 註：目前 Buff 先存入 `TFLAG:TEMP_BUFF_*`，作為後續傷害公式接入點；`@BATTLE_DRAW_CARDS` 會在下一回合開始將這些值重置為 0。
 
 #### 計算範例
-若本回合選取：物理 2、魔法 1、防禦 0、特殊 1，則
+若本回合選取 Attribute：火 2、水 1、風 0、土 1，則
 - `TEMP_BUFF_PATK = 20`
 - `TEMP_BUFF_MATK = 10`
 - `TEMP_BUFF_PDEF = 0`
 - `TEMP_BUFF_MDEF = 10`
 
-### 3.2 階段二：技能映射比對（Skill Resolution）
+### 3.2 階段二：Shape 技能映射比對（Skill Resolution）
 
 呼叫：`CALL BATTLE_MATCH_SKILL, LOCAL:50, LOCAL:51, LOCAL:52, LOCAL:53`
 
 比對範圍：`FOR LOCAL, 20000, 20010`
 
 比對條件（全部成立才命中）：
-1. 技能需求總和 > 0  
-   `SKILL_REQ_PHYS:ID + SKILL_REQ_MAG:ID + SKILL_REQ_DEF:ID + SKILL_REQ_SPEC:ID > 0`
-2. 玩家元素供給皆達標（特徵比對）  
-   - `選取物理 >= SKILL_REQ_PHYS:ID`
-   - `選取魔法 >= SKILL_REQ_MAG:ID`
-   - `選取防禦 >= SKILL_REQ_DEF:ID`
-   - `選取特殊 >= SKILL_REQ_SPEC:ID`
+1. 技能需求總和 > 0
+   `SKILL_REQ_SHAPE_PHYS:ID + SKILL_REQ_SHAPE_MAG:ID + SKILL_REQ_SHAPE_DEF:ID + SKILL_REQ_SHAPE_SPEC:ID > 0`
+2. 玩家 Shape 供給皆達標（`>=` 比對）
+   - `選取物理 Shape >= SKILL_REQ_SHAPE_PHYS:ID`
+   - `選取魔法 Shape >= SKILL_REQ_SHAPE_MAG:ID`
+   - `選取防禦 Shape >= SKILL_REQ_SHAPE_DEF:ID`
+   - `選取特殊 Shape >= SKILL_REQ_SHAPE_SPEC:ID`
 
-命中後：`RETURN 技能ID`  
+命中後：`RETURN 技能ID`
 未命中任何技能：`RETURN 0`
 
 #### 普攻保底（Fallback）
 - 當 `RESULT == 0`，視為未觸發特殊技能，輸出：
-  - `【元素共鳴】未觸發特殊技能。發動基礎攻擊！`
+  - `【形狀連鎖】未觸發特殊技能。發動基礎攻擊！`
 
 #### 技能命中
 - 當 `RESULT > 0`，輸出：
-  - `【元素共鳴】條件達成！發動技能 ID：{RESULT}！`
+  - `【形狀連鎖】條件達成！發動技能 ID：{RESULT}！`
 
 ### 3.3 敵方行動階段（Enemy Turn）
 
@@ -249,11 +275,18 @@ GOTO BATTLE_UI_MAIN_LOOP
 | 20001 | 重力斬擊 | 物理 2 + 魔法 1 |
 | 20002 | 絕對防禦 | 防禦 3 |
 
-> 以上需求由 `SKILL_REQ_*` 陣列定義，並由 `@BATTLE_MATCH_SKILL` 做 `>=` 比對。
+> 以上需求由 `SKILL_REQ_SHAPE_*` 陣列定義，並由 `@BATTLE_MATCH_SKILL` 做 `>=` 比對。
+
+## 9. 開發者注意事項（雙軸擴充）
+
+1. 新增屬性時，只能影響 `@BATTLE_CALC_BOOST` 與 UI 名稱映射；不得動到 `@BATTLE_MATCH_SKILL` 的 Shape 配方語意。
+2. 新增形狀時，必須同步擴充 `SKILL_REQ_SHAPE_*`、`@BATTLE_MATCH_SKILL`、UI 形狀文字映射。
+3. 若調整編碼基底（`CARD_PACK_BASE`），需同步檢查所有 `CARD / 10` 與 `CARD - ATTR*10` 的解碼邏輯。
+4. `UI_HAND_SEL` 與 `TEMP` 交換邏輯只搬運整數卡牌編碼，屬性/形狀解析應維持在出招與顯示階段，避免 Temp 功能與雙軸耦合。
 
 ---
 
-## 9. 傷害公式與結算（Damage Calculation）
+## 10. 傷害公式與結算（Damage Calculation）
 
 單次傷害採用下列基礎公式：
 
@@ -269,4 +302,3 @@ GOTO BATTLE_UI_MAIN_LOOP
 - 敵人 `BTL_HP <= 0`：玩家勝利。
 - 玩家出招後若敵人仍存活，系統進入敵方回合。
 - 敵方回合結束後若 `MASTER`（角色 0）的 `BTL_HP <= 0`：玩家敗北。
-
