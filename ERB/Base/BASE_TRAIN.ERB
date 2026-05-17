@@ -1,0 +1,187 @@
+; ============================================================
+; BASE_TRAIN.ERB
+; 職責：訓練室選單 UI 與訓練成長結算
+;   @BASE_TRAIN_MENU  — 選單路由（由 @BASE_MENU CALL，RETURN 回主選單）
+;   @SYS_TRAIN_APPLY  — 訓練成長公式唯一入口，禁止繞過直接寫入 BASE 陣列
+; ============================================================
+
+@BASE_TRAIN_MENU
+$BASE_TRAIN_MENU_TOP
+CALL BASE_SYNC_DAILY_USES
+LOCAL:10 = 1 + FLAG:BASE_FAC_LV_TRAIN / 2
+IF LOCAL:10 < 1
+    LOCAL:10 = 1
+ENDIF
+LOCAL:11 = 5 + FLAG:BASE_FAC_LV_TRAIN * 2
+LOCAL:12 = 15 + FLAG:BASE_FAC_LV_TRAIN * 3
+DRAWLINE
+CALL BASE_PRINT_HUD
+DRAWLINE
+PRINTFORML 【訓練室 Lv.{FLAG:BASE_FAC_LV_TRAIN}】
+PRINTFORML 今日使用次數：{TFLAG:BASE_USES_TRAIN}/{LOCAL:10}
+PRINTL [1] 基礎訓練（消耗 5 點補給，增加疲勞以提升訓練倍率）
+IF FLAG:BASE_FAC_LV_TRAIN >= 3
+    PRINTFORML [2] 專項訓練（消耗 10 補給 / 疲勞 +30 / 訓練倍率 +{LOCAL:12}）
+ENDIF
+PRINTL [8] 升級訓練室
+PRINTL [9] 返回基地選單
+INPUT RESULT
+
+IF RESULT == 9
+    RETURN
+ENDIF
+IF RESULT == 8
+    CALL FACILITY_UPGRADE_MENU, FLAG:BASE_FAC_LV_TRAIN, "訓練室"
+    IF RESULT == 1
+        FLAG:BASE_FAC_LV_TRAIN += 1
+    ENDIF
+    GOTO BASE_TRAIN_MENU_TOP
+ENDIF
+IF RESULT != 1 && RESULT != 2
+    PRINTL 請輸入 1、2、8 或 9。
+    GOTO BASE_TRAIN_MENU_TOP
+ENDIF
+IF RESULT == 2 && FLAG:BASE_FAC_LV_TRAIN < 3
+    PRINTL 訓練室需達 Lv.3 才能啟用專項訓練。
+    GOTO BASE_TRAIN_MENU_TOP
+ENDIF
+
+IF TFLAG:BASE_USES_TRAIN >= LOCAL:10
+    PRINTL 今日訓練次數已達上限。
+    GOTO BASE_TRAIN_MENU_TOP
+ENDIF
+
+; 依訓練類型設定消耗與參數（在呼叫 SELECT_RESIDENT_NPC 前儲存，避免 RESULT 被覆寫）
+LOCAL:9 = RESULT    ; 訓練類型：1=基礎 / 2=專項
+LOCAL:13 = 5        ; 補給消耗
+LOCAL:14 = 20       ; 疲勞增加
+LOCAL:15 = LOCAL:11 ; 訓練倍率加成（採基礎值）
+IF LOCAL:9 == 2
+    LOCAL:13 = 10
+    LOCAL:14 = 30
+    LOCAL:15 = LOCAL:12
+ENDIF
+
+IF FLAG:RES_SUPPLY < LOCAL:13
+    PRINTL 補給不足，無法進行訓練。
+    GOTO BASE_TRAIN_MENU_TOP
+ENDIF
+
+CALL SELECT_RESIDENT_NPC
+IF RESULT < 0
+    GOTO BASE_TRAIN_MENU_TOP
+ENDIF
+TARGET = RESULT
+IF CFLAG:TARGET:CF_FATIGUE >= 80
+    PRINTFORML [%CALLNAME:TARGET%] 疲勞過高，今日不適合訓練。
+    GOTO BASE_TRAIN_MENU_TOP
+ENDIF
+
+FLAG:RES_SUPPLY -= LOCAL:13
+IF FLAG:RES_SUPPLY < 0
+    FLAG:RES_SUPPLY = 0
+ENDIF
+
+PRINTL 請選擇側重訓練方案：
+PRINTL [1] 物理  [2] 魔法  [3] 特攻
+PRINTL [4] 物防  [5] 魔防  [6] 速度
+INPUT LOCAL:16
+IF LOCAL:16 < 1 || LOCAL:16 > 6
+    LOCAL:16 = 1
+ENDIF
+
+LOCAL:17 = BTL_PATK
+LOCALS:0 = "物理"
+IF LOCAL:16 == 2
+    LOCAL:17 = BTL_MATK
+    LOCALS:0 = "魔法"
+ELSEIF LOCAL:16 == 3
+    LOCAL:17 = BTL_SATK
+    LOCALS:0 = "特攻"
+ELSEIF LOCAL:16 == 4
+    LOCAL:17 = BTL_PDEF
+    LOCALS:0 = "物防"
+ELSEIF LOCAL:16 == 5
+    LOCAL:17 = BTL_MDEF
+    LOCALS:0 = "魔防"
+ELSEIF LOCAL:16 == 6
+    LOCAL:17 = BTL_SPEED
+    LOCALS:0 = "速度"
+ENDIF
+
+; 基礎成長量：基礎訓練 +1 / 專項訓練 +2
+LOCAL:18 = 1
+IF LOCAL:9 == 2
+    LOCAL:18 = 2
+ENDIF
+
+; 透過 @SYS_TRAIN_APPLY 封裝完整成長公式（含設施/住宿/狀態加成），回傳實際增加量
+ARG = TARGET
+ARG:1 = LOCAL:17
+ARG:2 = LOCAL:14
+ARG:3 = LOCAL:18
+ARG:4 = LOCAL:15
+CALL SYS_TRAIN_APPLY
+LOCAL:18 = RESULT
+
+TFLAG:BASE_USES_TRAIN += 1
+PRINTFORML 訓練完成：[%CALLNAME:TARGET%] %LOCALS:0% +{LOCAL:18}（目前 {BASE:TARGET:(LOCAL:17)} / 疲勞 {CFLAG:TARGET:CF_FATIGUE} / 訓練倍率 {CFLAG:TARGET:CF_TRAIN_MOD}）
+GOTO BASE_TRAIN_MENU_TOP
+
+; ============================================================
+; @SYS_TRAIN_APPLY — 訓練成長公式唯一入口
+; 封裝訓練成長公式：基礎成長 + 設施 LV 加成 + 住宿加成 + 狀態修正
+; ARG   = NPC ID
+; ARG:1 = 目標能力值索引（BTL_PATK 等）
+; ARG:2 = 疲勞增加量
+; ARG:3 = 基礎成長量（1=基礎訓練 / 2=專項訓練）
+; ARG:4 = 訓練倍率加成量
+; RETURN = 實際套用的成長量
+; ============================================================
+
+@SYS_TRAIN_APPLY
+LOCAL = ARG      ; NPC ID
+LOCAL:1 = ARG:1  ; 能力值索引
+LOCAL:2 = ARG:2  ; 疲勞消耗
+LOCAL:3 = ARG:3  ; 基礎成長
+
+; 設施等級加成：訓練室每 3 級 +1
+LOCAL:4 = FLAG:BASE_FAC_LV_TRAIN / 3
+
+; 住宿加成：好感 5 以上 +1
+LOCAL:5 = 0
+IF CFLAG:(LOCAL):CF_BOND_LV >= 5
+    LOCAL:5 = 1
+ENDIF
+
+; 狀態修正：心情良好 +1；疲勞偏高 -1
+LOCAL:6 = 0
+IF CFLAG:(LOCAL):CF_MOOD >= 70
+    LOCAL:6 += 1
+ENDIF
+IF CFLAG:(LOCAL):CF_FATIGUE >= 60
+    LOCAL:6 -= 1
+ENDIF
+
+; 合計（最低保底 1）
+LOCAL:7 = LOCAL:3 + LOCAL:4 + LOCAL:5 + LOCAL:6
+IF LOCAL:7 < 1
+    LOCAL:7 = 1
+ENDIF
+
+; 套用能力值成長
+BASE:(LOCAL):(LOCAL:1) += LOCAL:7
+
+; 套用疲勞
+CFLAG:(LOCAL):CF_FATIGUE += LOCAL:2
+IF CFLAG:(LOCAL):CF_FATIGUE > 100
+    CFLAG:(LOCAL):CF_FATIGUE = 100
+ENDIF
+
+; 套用訓練倍率
+CFLAG:(LOCAL):CF_TRAIN_MOD += ARG:4
+IF CFLAG:(LOCAL):CF_TRAIN_MOD > 200
+    CFLAG:(LOCAL):CF_TRAIN_MOD = 200
+ENDIF
+
+RETURN LOCAL:7

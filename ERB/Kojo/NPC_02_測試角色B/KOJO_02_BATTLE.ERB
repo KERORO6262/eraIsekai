@@ -1,0 +1,121 @@
+﻿; ============================================================
+; KOJO_02_BATTLE.ERB
+; NPC 02 / 測試角色B（Chara ID 2）開朗活潑型
+; 負責事件：EVT 300-399（戰鬥流程）
+;
+; 函式命名規則：@KOJO_NPC{CH}_EVT{EVT}
+;   CH = 2（Chara ID），EVT = 事件 ID
+; 呼叫方：@KOJO_MESSAGE（KOJO_CORE.ERB）經 TRYCCALLFORM 動態調用
+; 參數：ARG:0 = P0，ARG:1 = P1
+; 返回：RETURN 1（告知 TRYCCALLFORM 成功執行）
+;
+; 注意：EVT 310（BATTLE_TURN_DRAW）為高頻靜默事件，不建立函式，
+;   自動 fallback 至 @KOJO_DEFAULT（亦為靜默），避免刷屏。
+; ============================================================
+
+; ============================================================
+; @KOJO_NPC2_EVT311 — BATTLE_KEYCARD_HIT
+; P0=CARD_ID, P1=SLOT(0..3)
+; ============================================================
+
+@KOJO_NPC2_EVT311, ARG, ARG:1
+#DIM BOND_TIER
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 3) ? 1 : 0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 7) ? 2 : BOND_TIER
+
+IF BOND_TIER >= 1
+    PRINTL 拿到了！這是關鍵牌！
+ELSE
+    PRINTL 哦！這張！
+ENDIF
+
+RETURN 1
+
+; ============================================================
+; @KOJO_NPC2_EVT320 — BATTLE_MAP_SUCCESS
+; P0=SKILL_ID, P1=COMBO_CODE
+; ============================================================
+
+@KOJO_NPC2_EVT320, ARG, ARG:1
+#DIM BOND_TIER
+#DIM LUST_TIER
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 3) ? 1 : 0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 7) ? 2 : BOND_TIER
+LUST_TIER = (CFLAG:TARGET:CF_LUST >= 31) ? 1 : 0
+LUST_TIER = (CFLAG:TARGET:CF_LUST >= 71) ? 2 : LUST_TIER
+
+IF LUST_TIER == 2 && BOND_TIER >= 1
+    PRINTL 技能放出！這感覺超棒的！
+ELSEIF BOND_TIER >= 1
+    PRINTL 好！技能出擊！
+ELSE
+    PRINTL 放！
+ENDIF
+
+RETURN 1
+
+; ============================================================
+; @KOJO_NPC2_EVT330 — BATTLE_TEMP_STORE
+; P0=CARD_ID, P1=FROM_SLOT
+; ============================================================
+
+@KOJO_NPC2_EVT330, ARG, ARG:1
+#DIM BOND_TIER
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 3) ? 1 : 0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 7) ? 2 : BOND_TIER
+
+IF BOND_TIER >= 1
+    PRINTL 先放著，後面用！
+ELSE
+    PRINTL 先存！
+ENDIF
+
+RETURN 1
+
+; ============================================================
+; @KOJO_NPC2_EVT331 — BATTLE_TEMP_RETRIEVE
+; P0=CARD_ID, P1=TO_SLOT
+; ============================================================
+
+@KOJO_NPC2_EVT331, ARG, ARG:1
+#DIM BOND_TIER
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 3) ? 1 : 0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 7) ? 2 : BOND_TIER
+
+IF BOND_TIER >= 1
+    PRINTL 現在正是時候！取出來！
+ELSE
+    PRINTL 取出！
+ENDIF
+
+RETURN 1
+
+; ============================================================
+; @KOJO_NPC2_EVT350 — BATTLE_END
+; P0=勝敗(1=勝/0=敗), P1=回合數
+; ============================================================
+
+@KOJO_NPC2_EVT350, ARG, ARG:1
+#DIM P0
+#DIM BOND_TIER
+P0        = ARG:0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 3) ? 1 : 0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 7) ? 2 : BOND_TIER
+
+IF P0 == 1
+    IF BOND_TIER == 2
+        PRINTFORML 我們贏了！{CSTR:TARGET:CALL_PLAYER}，太厲害了！
+    ELSEIF BOND_TIER == 1
+        PRINTL 好耶！打贏了！
+    ELSE
+        PRINTL 贏了！
+    ENDIF
+ELSE
+    IF BOND_TIER >= 1
+        PRINTL 沒關係！下次一起贏回來！
+    ELSE
+        PRINTL 唉……
+    ENDIF
+ENDIF
+
+RETURN 1

@@ -1,0 +1,110 @@
+﻿; ============================================================
+; KOJO_02_BASE.ERB
+; NPC 02 / 測試角色B（Chara ID 2）開朗活潑型
+; 負責事件：EVT 100-299（基地與住宿 / 互動結果）
+;
+; 函式命名規則：@KOJO_NPC{CH}_EVT{EVT}
+;   CH = 2（Chara ID），EVT = 事件 ID
+; 呼叫方：@KOJO_MESSAGE（KOJO_CORE.ERB）經 TRYCCALLFORM 動態調用
+; 參數：ARG:0 = P0，ARG:1 = P1
+; 返回：RETURN 1（告知 TRYCCALLFORM 成功執行）
+;
+; 段位基準（Kojo_Standard.md 2.1）：
+;   BOND_TIER  0=疏離(0-2) / 1=普通(3-6) / 2=親密(7+)
+;   LUST_TIER  0=低(0-30)  / 1=中(31-70) / 2=高(71+)
+;   KOJO_TONE  0=正常 / 1=煩躁 / 2=低落
+; ============================================================
+
+; ============================================================
+; @KOJO_NPC2_EVT110 — MORNING_GREETING
+; P0=DAY, P1=0
+; ============================================================
+
+@KOJO_NPC2_EVT110, ARG, ARG:1
+#DIM P0
+#DIM BOND_TIER
+P0        = ARG:0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 3) ? 1 : 0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 7) ? 2 : BOND_TIER
+
+IF TFLAG:KOJO_TONE == 2
+    PRINTL 早……有點累，讓我緩一下。
+ELSEIF TFLAG:KOJO_TONE == 1
+    PRINTL ……早。（今天心情不太好）
+ELSEIF BOND_TIER == 2
+    PRINTFORML 早安！{CSTR:TARGET:CALL_PLAYER}，今天也一起加油吧！
+ELSEIF BOND_TIER == 1
+    PRINTL 早安！今天有什麼計劃嗎？
+ELSE
+    PRINTL 早！
+ENDIF
+
+RETURN 1
+
+; ============================================================
+; @KOJO_NPC2_EVT120 — ROOM_MOVE_IN
+; P0=ROOM_SLOT, P1=0
+; ============================================================
+
+@KOJO_NPC2_EVT120, ARG, ARG:1
+#DIM BOND_TIER
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 3) ? 1 : 0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 7) ? 2 : BOND_TIER
+
+IF BOND_TIER >= 1
+    PRINTL 感謝！一定會好好住的！
+ELSE
+    PRINTL 那就不客氣囉！
+ENDIF
+
+RETURN 1
+
+; ============================================================
+; @KOJO_NPC2_EVT121 — ROOM_MOVE_OUT
+; P0=OLD_SLOT, P1=REASON
+; ============================================================
+
+@KOJO_NPC2_EVT121, ARG, ARG:1
+#DIM BOND_TIER
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 3) ? 1 : 0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 7) ? 2 : BOND_TIER
+
+IF BOND_TIER == 2
+    PRINTFORML 還不想走……不過謝謝，{CSTR:TARGET:CALL_PLAYER}。之後有空再來！
+ELSEIF BOND_TIER == 1
+    PRINTL 之後再來玩！再見！
+ELSE
+    PRINTL 告辭囉！
+ENDIF
+
+RETURN 1
+
+; ============================================================
+; @KOJO_NPC2_EVT210 — INTERACT_RESULT
+; P0=CMD_ID, P1=結果碼(0=失敗/1=成功/2=大成功)
+; ============================================================
+
+@KOJO_NPC2_EVT210, ARG, ARG:1
+#DIM P1
+#DIM BOND_TIER
+P1        = ARG:1
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 3) ? 1 : 0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 7) ? 2 : BOND_TIER
+
+IF P1 == 0
+    PRINTL 沒關係！下次一定行的！
+ELSEIF P1 >= 2
+    IF BOND_TIER >= 1
+        PRINTL 耶！這感覺太棒了！
+    ELSE
+        PRINTL 好耶！
+    ENDIF
+ELSE
+    IF BOND_TIER >= 1
+        PRINTL 不錯！開心！
+    ELSE
+        PRINTL 好！
+    ENDIF
+ENDIF
+
+RETURN 1

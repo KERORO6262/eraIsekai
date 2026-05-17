@@ -1,0 +1,863 @@
+; ============================================================
+; BASE_INTERACT.ERB
+; 職責：住宿 NPC 互動系統（完整流程封裝）
+; 呼叫方：@BASE_LOUNGE_MENU → CALL @INTERACT_DISPATCH
+;
+; 流程層次：
+;   Step 5-1 分派     @INTERACT_DISPATCH
+;   Step 5-2 Gate     @INTERACT_GATE_CHECK
+;   Step 5-3 成功率   @CALC_INTERACT_SUCCESS_DAILY / @CALC_INTERACT_SUCCESS_ADULT
+;   Step 5-3 效果倍率 @CALC_INTERACT_EFFECT_SCALE
+;   Step 5-3 PALAM    @INTERACT_APPLY_PALAM
+;   Step 5-4 刻印     @INTERACT_APPLY_MARK / @INTERACT_CHECK_MARK_LV
+;   Step 5-4 絕頂     @INTERACT_CHECK_CLIMAX
+;   Step 5-4 處女旗標 @INTERACT_VIRGIN_CHECK
+;   Step 5-5 回饋     @INTERACT_FEEDBACK_BASE
+;   Step 5-5 撤離壓力 @INTERACT_UPDATE_MOVEOUT
+;   Step 5-6 失敗分派 @INTERACT_APPLY_FAIL
+;
+; 前置條件：呼叫前 TARGET 必須已設定為合法住宿 NPC
+; ============================================================
+
+; ============================================================
+; Step 5-1：互動指令分派
+; ARG = CMD_ID（300-339）
+; RETURN 1=執行完成 / 0=中止
+; ============================================================
+
+@INTERACT_DISPATCH, ARG
+LOCAL = ARG   ; CMD_ID
+
+TFLAG:INTERACT_LAST_CMD = LOCAL
+
+; 設定互動分類
+IF LOCAL >= 300 && LOCAL < 320
+    TFLAG:INTERACT_CATEGORY = 0   ; 日常互動
+ELSEIF LOCAL >= 320 && LOCAL < 340
+    TFLAG:INTERACT_CATEGORY = 1   ; 成人向互動
+ELSE
+    PRINTL [互動分派] 未知指令 ID。
+    RETURN 0
+ENDIF
+
+SELECTCASE LOCAL
+    CASE 300
+        CALL INTERACT_CMD_DAILY_TALK
+    CASE 301
+        CALL INTERACT_CMD_DAILY_SOOTHE
+    CASE 302
+        CALL INTERACT_CMD_DAILY_ENTERTAIN
+    CASE 303
+        CALL INTERACT_CMD_DAILY_GIFT
+    CASE 320
+        CALL INTERACT_CMD_ADULT_PROBE
+    CASE 321
+        CALL INTERACT_CMD_ADULT_DEVELOP
+    CASE 329
+        CALL INTERACT_CMD_ADULT_AFTERCARE
+    CASEELSE
+        PRINTL [互動分派] 未知指令 ID。
+        RETURN 0
+ENDSELECT
+
+; 若 handler 正常執行（RESULT==1），計入使用次數
+IF RESULT == 1
+    TFLAG:BASE_USES_LOUNGE += 1
+ENDIF
+; EVT 210：互動結算後（P0=CMD_ID, P1=結果碼 0/1）
+CALL KOJO_MESSAGE, TARGET, 210, LOCAL, RESULT
+RETURN RESULT
+
+; ============================================================
+; 日常互動指令 300：日常交流
+; 效果：心情改善、好感機率提升、輕微疲勞緩解
+; ============================================================
+
+@INTERACT_CMD_DAILY_TALK
+LOCAL:10 = FLAG:BASE_FAC_LV_LOUNGE
+; 疲勞緩解量（輕量，以心情改善為主）
+LOCAL:11 = 10 + LOCAL:10 * 3
+; 好感提升機率（%）：休息室等級影響
+LOCAL:12 = 30 + LOCAL:10 * 5
+IF LOCAL:12 > 90
+    LOCAL:12 = 90
+ENDIF
+
+; 心情改善
+CFLAG:TARGET:CF_MOOD += 8
+IF CFLAG:TARGET:CF_MOOD > 100
+    CFLAG:TARGET:CF_MOOD = 100
+ENDIF
+
+; 疲勞輕微緩解
+CFLAG:TARGET:CF_FATIGUE -= LOCAL:11
+IF CFLAG:TARGET:CF_FATIGUE < 0
+    CFLAG:TARGET:CF_FATIGUE = 0
+ENDIF
+
+; 好感機率判定
+LOCAL:2 = 0
+IF RAND:100 < LOCAL:12
+    CFLAG:TARGET:CF_BOND_LV += 1
+    IF CFLAG:TARGET:CF_BOND_LV > 10
+        CFLAG:TARGET:CF_BOND_LV = 10
+    ENDIF
+    LOCAL:2 = 1
+ENDIF
+
+IF LOCAL:2 == 1
+    PRINTFORML 【交流】[%CALLNAME:TARGET%] 聊得不錯，關係有所改善。
+ELSE
+    PRINTFORML 【交流】[%CALLNAME:TARGET%] 進行了輕鬆的對話。
+ENDIF
+PRINTFORML   → 心情 {CFLAG:TARGET:CF_MOOD} / 疲勞 {CFLAG:TARGET:CF_FATIGUE} / 好感 {CFLAG:TARGET:CF_BOND_LV}
+RETURN 1
+
+; ============================================================
+; 日常互動指令 301：安撫
+; 效果：大幅降低疲勞與壓力，心情小幅改善
+; ============================================================
+
+@INTERACT_CMD_DAILY_SOOTHE
+LOCAL:10 = FLAG:BASE_FAC_LV_LOUNGE
+; 疲勞緩解（安撫為主，數值較高）
+LOCAL:11 = 20 + LOCAL:10 * 5
+IF LOCAL:11 > 60
+    LOCAL:11 = 60
+ENDIF
+
+CFLAG:TARGET:CF_FATIGUE -= LOCAL:11
+IF CFLAG:TARGET:CF_FATIGUE < 0
+    CFLAG:TARGET:CF_FATIGUE = 0
+ENDIF
+
+; 心情小幅改善
+CFLAG:TARGET:CF_MOOD += 5
+IF CFLAG:TARGET:CF_MOOD > 100
+    CFLAG:TARGET:CF_MOOD = 100
+ENDIF
+
+; 若有撤離冷卻壓力，此指令略微緩和
+IF CFLAG:TARGET:CF_MOVEOUT_COOLDOWN > 0
+    CFLAG:TARGET:CF_MOVEOUT_COOLDOWN -= 1
+ENDIF
+
+PRINTFORML 【安撫】[%CALLNAME:TARGET%] 情緒趨於穩定，疲勞有效緩解。
+PRINTFORML   → 心情 {CFLAG:TARGET:CF_MOOD} / 疲勞 {CFLAG:TARGET:CF_FATIGUE}
+RETURN 1
+
+; ============================================================
+; 日常互動指令 302：娛樂活動
+; 效果：大幅改善心情，疲勞不變或略增
+; ============================================================
+
+@INTERACT_CMD_DAILY_ENTERTAIN
+LOCAL:10 = FLAG:BASE_FAC_LV_LOUNGE
+; 心情改善量（娛樂為主）
+LOCAL:11 = 15 + LOCAL:10 * 4
+IF LOCAL:11 > 40
+    LOCAL:11 = 40
+ENDIF
+
+CFLAG:TARGET:CF_MOOD += LOCAL:11
+IF CFLAG:TARGET:CF_MOOD > 100
+    CFLAG:TARGET:CF_MOOD = 100
+ENDIF
+
+; 娛樂有輕微疲勞代價
+CFLAG:TARGET:CF_FATIGUE += 5
+IF CFLAG:TARGET:CF_FATIGUE > 100
+    CFLAG:TARGET:CF_FATIGUE = 100
+ENDIF
+
+PRINTFORML 【娛樂】[%CALLNAME:TARGET%] 玩得十分盡興，心情大幅改善。
+PRINTFORML   → 心情 {CFLAG:TARGET:CF_MOOD} / 疲勞 {CFLAG:TARGET:CF_FATIGUE}
+RETURN 1
+
+; ============================================================
+; 日常互動指令 303：贈送物資
+; 消耗：補給 5 點；效果：好感穩定提升，心情改善
+; ============================================================
+
+@INTERACT_CMD_DAILY_GIFT
+IF FLAG:RES_SUPPLY < 5
+    PRINTL 【贈禮】補給不足（需 5），無法執行。
+    RETURN 0
+ENDIF
+
+FLAG:RES_SUPPLY -= 5
+IF FLAG:RES_SUPPLY < 0
+    FLAG:RES_SUPPLY = 0
+ENDIF
+
+LOCAL:10 = FLAG:BASE_FAC_LV_LOUNGE
+
+; 好感確定提升（贈禮確定有效）
+CFLAG:TARGET:CF_BOND_LV += 1
+IF CFLAG:TARGET:CF_BOND_LV > 10
+    CFLAG:TARGET:CF_BOND_LV = 10
+ENDIF
+
+; 心情改善
+CFLAG:TARGET:CF_MOOD += 12
+IF CFLAG:TARGET:CF_MOOD > 100
+    CFLAG:TARGET:CF_MOOD = 100
+ENDIF
+
+PRINTFORML 【贈禮】[%CALLNAME:TARGET%] 收到物資，表情明顯鬆動。（補給 -{5}）
+PRINTFORML   → 心情 {CFLAG:TARGET:CF_MOOD} / 好感 {CFLAG:TARGET:CF_BOND_LV}
+RETURN 1
+
+; ============================================================
+; 成人向互動指令 320：試探
+; 完整流程：Gate → 成功率 → EffectScale → PALAM → 刻印 → 絕頂 → 回饋
+; PALAM_DELTA（成功時）：快樂+8 / 痛苦+3 / 反感+6 / 興奮+15
+; ============================================================
+
+@INTERACT_CMD_ADULT_PROBE
+; 設定指令 PALAM 基礎增量
+TFLAG:INTERACT_DELTA_PLEASURE = 8
+TFLAG:INTERACT_DELTA_PAIN = 3
+TFLAG:INTERACT_DELTA_DISGUST = 6
+TFLAG:INTERACT_DELTA_LUST = 15
+TFLAG:INTERACT_HAS_VIRGIN_CHECK = 0
+
+; Step 5-2：Gate 判斷（反感門檻 75）
+ARG = 75
+ARG:1 = 1
+CALL INTERACT_GATE_CHECK
+IF RESULT == 0
+    RETURN 0
+ENDIF
+
+; Step 5-3：成功率計算與擲骰
+CALL CALC_INTERACT_SUCCESS_ADULT
+TFLAG:INTERACT_ROLL = RAND:100
+
+PRINTFORML 【試探】[%CALLNAME:TARGET%]...（成功率 {TFLAG:INTERACT_SUCCESS_RATE}）
+
+IF TFLAG:INTERACT_ROLL < TFLAG:INTERACT_SUCCESS_RATE
+    ; ─── 成功路徑 ───
+    CALL CALC_INTERACT_EFFECT_SCALE
+    CALL INTERACT_APPLY_PALAM
+    CALL INTERACT_APPLY_MARK
+    CALL INTERACT_CHECK_CLIMAX
+    CFLAG:TARGET:CF_ADULT_EXP += 1
+    IF CFLAG:TARGET:CF_ADULT_EXP > 999
+        CFLAG:TARGET:CF_ADULT_EXP = 999
+    ENDIF
+    CALL INTERACT_FEEDBACK_BASE
+    CALL INTERACT_UPDATE_MOVEOUT, 0
+    PRINTFORML   成功：雖有些困惑，但接受了試探。（效果倍率 {TFLAG:INTERACT_EFFECT_SCALE_X100}）
+    PRINTFORML   → 快樂 {PALAM:TARGET:PALAM_PLEASURE} / 反感 {PALAM:TARGET:PALAM_DISGUST} / 興奮 {PALAM:TARGET:PALAM_LUST}
+    RETURN 1
+ENDIF
+
+; ─── 失敗路徑：判斷等級 ───
+; 差距越大 + 反感越高 → 失敗等級越嚴重
+LOCAL:10 = TFLAG:INTERACT_ROLL - TFLAG:INTERACT_SUCCESS_RATE
+LOCAL:11 = 0
+IF LOCAL:10 > 20
+    IF PALAM:TARGET:PALAM_DISGUST >= 80
+        LOCAL:11 = 2
+    ELSEIF PALAM:TARGET:PALAM_DISGUST >= 60
+        LOCAL:11 = 1
+    ENDIF
+ENDIF
+CALL INTERACT_APPLY_FAIL, LOCAL:11
+RETURN 1
+
+; ============================================================
+; 成人向互動指令 321：開發指令
+; 完整流程：Gate → 成功率 → EffectScale → PALAM → 刻印 → 絕頂 → 處女旗標 → 回饋
+; PALAM_DELTA（成功時）：快樂+12 / 痛苦+8 / 反感+8 / 興奮+18
+; 門檻較嚴（Gate 反感<65），含 VIRGIN_CHECK
+; ============================================================
+
+@INTERACT_CMD_ADULT_DEVELOP
+; 設定指令 PALAM 基礎增量
+TFLAG:INTERACT_DELTA_PLEASURE = 12
+TFLAG:INTERACT_DELTA_PAIN = 8
+TFLAG:INTERACT_DELTA_DISGUST = 8
+TFLAG:INTERACT_DELTA_LUST = 18
+TFLAG:INTERACT_HAS_VIRGIN_CHECK = 1
+
+; Step 5-2：Gate 判斷（門檻較嚴，反感門檻 65）
+ARG = 65
+ARG:1 = 1
+CALL INTERACT_GATE_CHECK
+IF RESULT == 0
+    RETURN 0
+ENDIF
+
+; Step 5-3：成功率計算與擲骰
+CALL CALC_INTERACT_SUCCESS_ADULT
+TFLAG:INTERACT_ROLL = RAND:100
+
+PRINTFORML 【開發】[%CALLNAME:TARGET%]...（成功率 {TFLAG:INTERACT_SUCCESS_RATE}）
+
+IF TFLAG:INTERACT_ROLL < TFLAG:INTERACT_SUCCESS_RATE
+    ; ─── 成功路徑 ───
+    CALL CALC_INTERACT_EFFECT_SCALE
+    CALL INTERACT_APPLY_PALAM
+    CALL INTERACT_APPLY_MARK
+    CALL INTERACT_CHECK_CLIMAX
+    CALL INTERACT_VIRGIN_CHECK
+    CFLAG:TARGET:CF_ADULT_EXP += 2
+    IF CFLAG:TARGET:CF_ADULT_EXP > 999
+        CFLAG:TARGET:CF_ADULT_EXP = 999
+    ENDIF
+    CALL INTERACT_FEEDBACK_BASE
+    CALL INTERACT_UPDATE_MOVEOUT, 0
+    PRINTFORML   成功：反應超出預期，留下深刻體驗。（效果倍率 {TFLAG:INTERACT_EFFECT_SCALE_X100}）
+    PRINTFORML   → 快樂 {PALAM:TARGET:PALAM_PLEASURE} / 痛苦 {PALAM:TARGET:PALAM_PAIN} / 興奮 {PALAM:TARGET:PALAM_LUST}
+    RETURN 1
+ENDIF
+
+; ─── 失敗路徑：開發指令門檻更低，更容易觸發大失敗 ───
+LOCAL:10 = TFLAG:INTERACT_ROLL - TFLAG:INTERACT_SUCCESS_RATE
+LOCAL:11 = 0
+IF LOCAL:10 > 20
+    IF PALAM:TARGET:PALAM_DISGUST >= 70
+        LOCAL:11 = 2
+    ELSE
+        LOCAL:11 = 1
+    ENDIF
+ELSEIF LOCAL:10 > 10
+    IF PALAM:TARGET:PALAM_DISGUST >= 50
+        LOCAL:11 = 1
+    ENDIF
+ENDIF
+CALL INTERACT_APPLY_FAIL, LOCAL:11
+RETURN 1
+
+; ============================================================
+; 成人向互動指令 329：善後安撫
+; 低風險的關係穩定指令，不走完整成功率計算
+; 效果：降低反感（-5）、改善心情（+5）、輕微緩解疲勞（-5）
+;       透過 @INTERACT_UPDATE_MOVEOUT,4 降低撤離壓力（-2）
+; ============================================================
+
+@INTERACT_CMD_ADULT_AFTERCARE
+; 反感緩和
+PALAM:TARGET:PALAM_DISGUST -= 5
+IF PALAM:TARGET:PALAM_DISGUST < 0
+    PALAM:TARGET:PALAM_DISGUST = 0
+ENDIF
+
+; 心情微幅改善
+CFLAG:TARGET:CF_MOOD += 5
+IF CFLAG:TARGET:CF_MOOD > 100
+    CFLAG:TARGET:CF_MOOD = 100
+ENDIF
+
+; 疲勞輕微緩解
+CFLAG:TARGET:CF_FATIGUE -= 5
+IF CFLAG:TARGET:CF_FATIGUE < 0
+    CFLAG:TARGET:CF_FATIGUE = 0
+ENDIF
+
+; Step 5-5：降低撤離壓力（善後路徑）
+CALL INTERACT_UPDATE_MOVEOUT, 4
+
+PRINTFORML 【善後】[%CALLNAME:TARGET%] 情緒得到安撫，關係壓力有所緩解。
+PRINTFORML   → 心情 {CFLAG:TARGET:CF_MOOD} / 反感 {PALAM:TARGET:PALAM_DISGUST} / 撤離壓力 {CFLAG:TARGET:CF_MOVEOUT_COOLDOWN}
+RETURN 1
+
+; ============================================================
+; Step 5-2：Gate 判斷
+; ARG   = MAX_DISGUST 門檻（指令專屬）
+; ARG:1 = 指令分類（0=日常 / 1=成人向）
+; RETURN 1=允許 / 0=禁止
+; ============================================================
+
+@INTERACT_GATE_CHECK
+LOCAL = ARG     ; MAX_DISGUST 門檻
+LOCAL:1 = ARG:1 ; 分類（0=日常 / 1=成人向）
+
+IF LOCAL:1 == 1
+    ; 成人向：反感達到或超過門檻 → 拒絕執行
+    IF PALAM:TARGET:PALAM_DISGUST >= LOCAL
+        PRINTFORML 【拒絕】[%CALLNAME:TARGET%] 明顯抗拒，不願接受此要求。（反感 {PALAM:TARGET:PALAM_DISGUST}）
+        RETURN 0
+    ENDIF
+    ; 成人向：疲勞 >= 90 → 拒絕執行
+    IF CFLAG:TARGET:CF_FATIGUE >= 90
+        PRINTFORML 【拒絕】[%CALLNAME:TARGET%] 已精疲力竭，無法進行此類互動。（疲勞 {CFLAG:TARGET:CF_FATIGUE}）
+        RETURN 0
+    ENDIF
+ENDIF
+
+RETURN 1
+
+; ============================================================
+; Step 5-3：成功率計算（日常互動）
+; 公式：AffinityScore = BOND_LV*8 + MOOD*0.4 - FATIGUE*0.3 - 反感*0.6
+;       SuccessRate   = CLAMP(10, 95, 60 + AffinityScore)
+; 讀取 TARGET；寫入 TFLAG:INTERACT_SUCCESS_RATE；RETURN SuccessRate
+; ============================================================
+
+@CALC_INTERACT_SUCCESS_DAILY
+LOCAL = CFLAG:TARGET:CF_BOND_LV
+LOCAL:1 = CFLAG:TARGET:CF_MOOD
+LOCAL:2 = CFLAG:TARGET:CF_FATIGUE
+LOCAL:3 = PALAM:TARGET:PALAM_DISGUST
+
+; 整數近似（x10 縮放後 /10）
+; AffinityScore_x10 = BOND*80 + MOOD*4 - FATIGUE*3 - 反感*6
+LOCAL:10 = LOCAL * 80 + LOCAL:1 * 4 - LOCAL:2 * 3 - LOCAL:3 * 6
+LOCAL:10 = LOCAL:10 / 10
+
+; SuccessRate = CLAMP(10, 95, 60 + AffinityScore)
+LOCAL:11 = 60 + LOCAL:10
+IF LOCAL:11 < 10
+    LOCAL:11 = 10
+ELSEIF LOCAL:11 > 95
+    LOCAL:11 = 95
+ENDIF
+
+TFLAG:INTERACT_SUCCESS_RATE = LOCAL:11
+RETURN LOCAL:11
+
+; ============================================================
+; Step 5-3：成功率計算（成人向互動）
+; 公式：ConsentScore = BOND_LV*10 + MOOD*0.2 + 興奮*0.4 - 反感*1.2 - FATIGUE*0.4
+;       SuccessRate  = CLAMP(5, 90, 40 + ConsentScore)
+; 讀取 TARGET；寫入 TFLAG:INTERACT_SUCCESS_RATE；RETURN SuccessRate
+; ============================================================
+
+@CALC_INTERACT_SUCCESS_ADULT
+LOCAL = CFLAG:TARGET:CF_BOND_LV
+LOCAL:1 = CFLAG:TARGET:CF_MOOD
+LOCAL:2 = CFLAG:TARGET:CF_FATIGUE
+LOCAL:3 = PALAM:TARGET:PALAM_DISGUST
+LOCAL:4 = PALAM:TARGET:PALAM_LUST
+
+; ConsentScore_x10 = BOND*100 + MOOD*2 + 興奮*4 - 反感*12 - FATIGUE*4
+LOCAL:10 = LOCAL * 100 + LOCAL:1 * 2 + LOCAL:4 * 4 - LOCAL:3 * 12 - LOCAL:2 * 4
+LOCAL:10 = LOCAL:10 / 10
+
+; SuccessRate = CLAMP(5, 90, 40 + ConsentScore)
+LOCAL:11 = 40 + LOCAL:10
+IF LOCAL:11 < 5
+    LOCAL:11 = 5
+ELSEIF LOCAL:11 > 90
+    LOCAL:11 = 90
+ENDIF
+
+TFLAG:INTERACT_SUCCESS_RATE = LOCAL:11
+RETURN LOCAL:11
+
+; ============================================================
+; Step 5-3：效果倍率計算
+; 公式：EffectScale = 1.0 + (SuccessRate-50)/100
+;       反感>=70 → *0.6；反感<=20 → *1.1（均以整數 x100 運算）
+; 讀取 TFLAG:INTERACT_SUCCESS_RATE 與 TARGET 反感
+; 寫入 TFLAG:INTERACT_EFFECT_SCALE_X100；RETURN EffectScale_x100
+; ============================================================
+
+@CALC_INTERACT_EFFECT_SCALE
+LOCAL = TFLAG:INTERACT_SUCCESS_RATE
+LOCAL:1 = PALAM:TARGET:PALAM_DISGUST
+
+; EffectScale_x100 = 50 + SR（等同 100 + (SR-50)）
+LOCAL:10 = 50 + LOCAL
+
+; 反感懲罰 / 獎勵
+IF LOCAL:1 >= 70
+    LOCAL:10 = LOCAL:10 * 60 / 100
+ELSEIF LOCAL:1 <= 20
+    LOCAL:10 = LOCAL:10 * 110 / 100
+ENDIF
+
+; 下限保護（至少 10）
+IF LOCAL:10 < 10
+    LOCAL:10 = 10
+ENDIF
+
+TFLAG:INTERACT_EFFECT_SCALE_X100 = LOCAL:10
+RETURN LOCAL:10
+
+; ============================================================
+; Step 5-3：PALAM 變動套用
+; 讀取 TFLAG:INTERACT_DELTA_* 與 TFLAG:INTERACT_EFFECT_SCALE_X100
+; 套用到 PALAM:TARGET；結果寫入 TFLAG:INTERACT_ACTUAL_*
+; ============================================================
+
+@INTERACT_APPLY_PALAM
+LOCAL = TFLAG:INTERACT_EFFECT_SCALE_X100
+
+; 實際增量 = 基礎增量 * EffectScale / 100
+LOCAL:1 = TFLAG:INTERACT_DELTA_PLEASURE * LOCAL / 100
+LOCAL:2 = TFLAG:INTERACT_DELTA_PAIN * LOCAL / 100
+LOCAL:3 = TFLAG:INTERACT_DELTA_DISGUST * LOCAL / 100
+LOCAL:4 = TFLAG:INTERACT_DELTA_LUST * LOCAL / 100
+
+; 套用快樂
+PALAM:TARGET:PALAM_PLEASURE += LOCAL:1
+IF PALAM:TARGET:PALAM_PLEASURE > 100
+    PALAM:TARGET:PALAM_PLEASURE = 100
+ENDIF
+IF PALAM:TARGET:PALAM_PLEASURE < 0
+    PALAM:TARGET:PALAM_PLEASURE = 0
+ENDIF
+
+; 套用痛苦
+PALAM:TARGET:PALAM_PAIN += LOCAL:2
+IF PALAM:TARGET:PALAM_PAIN > 100
+    PALAM:TARGET:PALAM_PAIN = 100
+ENDIF
+IF PALAM:TARGET:PALAM_PAIN < 0
+    PALAM:TARGET:PALAM_PAIN = 0
+ENDIF
+
+; 套用反感
+PALAM:TARGET:PALAM_DISGUST += LOCAL:3
+IF PALAM:TARGET:PALAM_DISGUST > 100
+    PALAM:TARGET:PALAM_DISGUST = 100
+ENDIF
+IF PALAM:TARGET:PALAM_DISGUST < 0
+    PALAM:TARGET:PALAM_DISGUST = 0
+ENDIF
+
+; 套用興奮
+PALAM:TARGET:PALAM_LUST += LOCAL:4
+IF PALAM:TARGET:PALAM_LUST > 100
+    PALAM:TARGET:PALAM_LUST = 100
+ENDIF
+IF PALAM:TARGET:PALAM_LUST < 0
+    PALAM:TARGET:PALAM_LUST = 0
+ENDIF
+
+; 儲存實際增量（供 @INTERACT_APPLY_MARK 使用）
+TFLAG:INTERACT_ACTUAL_PLEASURE = LOCAL:1
+TFLAG:INTERACT_ACTUAL_PAIN = LOCAL:2
+TFLAG:INTERACT_ACTUAL_DISGUST = LOCAL:3
+TFLAG:INTERACT_ACTUAL_LUST = LOCAL:4
+RETURN
+
+; ============================================================
+; Step 5-4：刻印點數結算
+; 苦痛刻印：max(0, Δ痛苦 - Δ快樂) + (反感>=60 ? 2 : 0)
+; 快樂刻印：max(0, Δ快樂 + Δ興奮 - Δ反感)
+; 讀取 TFLAG:INTERACT_ACTUAL_* 與 TARGET 反感
+; 更新 CFLAG:TARGET:CF_MARK_*_PT；呼叫 @INTERACT_CHECK_MARK_LV
+; ============================================================
+
+@INTERACT_APPLY_MARK
+LOCAL = TFLAG:INTERACT_ACTUAL_PAIN
+LOCAL:1 = TFLAG:INTERACT_ACTUAL_PLEASURE
+LOCAL:2 = TFLAG:INTERACT_ACTUAL_LUST
+LOCAL:3 = TFLAG:INTERACT_ACTUAL_DISGUST
+LOCAL:4 = PALAM:TARGET:PALAM_DISGUST
+
+; 苦痛刻印點數
+LOCAL:10 = LOCAL - LOCAL:1
+IF LOCAL:10 < 0
+    LOCAL:10 = 0
+ENDIF
+IF LOCAL:4 >= 60
+    LOCAL:10 += 2
+ENDIF
+
+; 快樂刻印點數
+LOCAL:11 = LOCAL:1 + LOCAL:2 - LOCAL:3
+IF LOCAL:11 < 0
+    LOCAL:11 = 0
+ENDIF
+
+CFLAG:TARGET:CF_MARK_PAIN_PT += LOCAL:10
+CFLAG:TARGET:CF_MARK_PLEASURE_PT += LOCAL:11
+
+CALL INTERACT_CHECK_MARK_LV
+RETURN
+
+; ============================================================
+; Step 5-4：刻印升級檢查
+; 門檻 20 / 60 / 120；升級後輸出提示
+; ============================================================
+
+@INTERACT_CHECK_MARK_LV
+
+; 苦痛刻印升級檢查（以 GOTO 重新判定直到穩定）
+$PAIN_LV_LOOP
+IF CFLAG:TARGET:CF_MARK_PAIN_LV >= 3
+    IF CFLAG:TARGET:CF_MARK_PAIN_PT > 120
+        CFLAG:TARGET:CF_MARK_PAIN_PT = 120
+    ENDIF
+ELSE
+    LOCAL:20 = 20
+    IF CFLAG:TARGET:CF_MARK_PAIN_LV == 1
+        LOCAL:20 = 60
+    ELSEIF CFLAG:TARGET:CF_MARK_PAIN_LV == 2
+        LOCAL:20 = 120
+    ENDIF
+    IF CFLAG:TARGET:CF_MARK_PAIN_PT >= LOCAL:20
+        CFLAG:TARGET:CF_MARK_PAIN_LV += 1
+        PRINTFORML [刻印] [%CALLNAME:TARGET%] 苦痛刻印升至 Lv.{CFLAG:TARGET:CF_MARK_PAIN_LV}！
+        GOTO PAIN_LV_LOOP
+    ENDIF
+ENDIF
+
+; 快樂刻印升級檢查
+$PLEA_LV_LOOP
+IF CFLAG:TARGET:CF_MARK_PLEASURE_LV >= 3
+    IF CFLAG:TARGET:CF_MARK_PLEASURE_PT > 120
+        CFLAG:TARGET:CF_MARK_PLEASURE_PT = 120
+    ENDIF
+ELSE
+    LOCAL:21 = 20
+    IF CFLAG:TARGET:CF_MARK_PLEASURE_LV == 1
+        LOCAL:21 = 60
+    ELSEIF CFLAG:TARGET:CF_MARK_PLEASURE_LV == 2
+        LOCAL:21 = 120
+    ENDIF
+    IF CFLAG:TARGET:CF_MARK_PLEASURE_PT >= LOCAL:21
+        CFLAG:TARGET:CF_MARK_PLEASURE_LV += 1
+        PRINTFORML [刻印] [%CALLNAME:TARGET%] 快樂刻印升至 Lv.{CFLAG:TARGET:CF_MARK_PLEASURE_LV}！
+        GOTO PLEA_LV_LOOP
+    ENDIF
+ENDIF
+
+RETURN
+
+; ============================================================
+; Step 5-4：絕頂事件觸發
+; 條件：興奮>=90 且 快樂>=70 且 反感<=40 且 EffectScale>=1.0(x100>=100)
+; 效果：興奮大幅下降、快樂小幅上升、開發經驗+3、快樂刻印+3
+; ============================================================
+
+@INTERACT_CHECK_CLIMAX
+IF PALAM:TARGET:PALAM_LUST < 90
+    RETURN
+ENDIF
+IF PALAM:TARGET:PALAM_PLEASURE < 70
+    RETURN
+ENDIF
+IF PALAM:TARGET:PALAM_DISGUST > 40
+    RETURN
+ENDIF
+IF TFLAG:INTERACT_EFFECT_SCALE_X100 < 100
+    RETURN
+ENDIF
+
+; 絕頂觸發
+PRINTFORML [%CALLNAME:TARGET%] 在連續刺激下達到極致，全身顫抖。
+PALAM:TARGET:PALAM_LUST -= 60
+IF PALAM:TARGET:PALAM_LUST < 20
+    PALAM:TARGET:PALAM_LUST = 20
+ENDIF
+PALAM:TARGET:PALAM_PLEASURE += 5
+IF PALAM:TARGET:PALAM_PLEASURE > 100
+    PALAM:TARGET:PALAM_PLEASURE = 100
+ENDIF
+CFLAG:TARGET:CF_ADULT_EXP += 3
+IF CFLAG:TARGET:CF_ADULT_EXP > 999
+    CFLAG:TARGET:CF_ADULT_EXP = 999
+ENDIF
+CFLAG:TARGET:CF_MARK_PLEASURE_PT += 3
+CALL INTERACT_CHECK_MARK_LV
+RETURN
+
+; ============================================================
+; Step 5-4：處女旗標處理
+; 條件：TFLAG:INTERACT_HAS_VIRGIN_CHECK==1 且 CF_VIRGIN==1 且 反感<60
+; 效果：設定 VIRGIN=0、開發經驗+10、快樂刻印+5
+; ============================================================
+
+@INTERACT_VIRGIN_CHECK
+IF TFLAG:INTERACT_HAS_VIRGIN_CHECK != 1
+    RETURN
+ENDIF
+IF CFLAG:TARGET:CF_VIRGIN != 1
+    RETURN
+ENDIF
+IF PALAM:TARGET:PALAM_DISGUST >= 60
+    RETURN
+ENDIF
+
+CFLAG:TARGET:CF_VIRGIN = 0
+CFLAG:TARGET:CF_ADULT_EXP += 10
+IF CFLAG:TARGET:CF_ADULT_EXP > 999
+    CFLAG:TARGET:CF_ADULT_EXP = 999
+ENDIF
+CFLAG:TARGET:CF_MARK_PLEASURE_PT += 5
+PRINTFORML [%CALLNAME:TARGET%] 初次體驗，留下深刻印象。（開發經驗 +10）
+CALL INTERACT_CHECK_MARK_LV
+RETURN
+
+; ============================================================
+; Step 5-5：回饋到基地
+; 依刻印等級與好感調整 TRAIN_MOD；依高疲勞額外減少疲勞
+; ============================================================
+
+@INTERACT_FEEDBACK_BASE
+LOCAL = CFLAG:TARGET:CF_MARK_PLEASURE_LV  ; 快樂刻印等級
+LOCAL:1 = CFLAG:TARGET:CF_MARK_PAIN_LV   ; 苦痛刻印等級
+LOCAL:2 = CFLAG:TARGET:CF_BOND_LV
+LOCAL:3 = CFLAG:TARGET:CF_FATIGUE
+LOCAL:4 = PALAM:TARGET:PALAM_DISGUST
+
+; TRAIN_MOD 調整量
+LOCAL:10 = 0
+
+; 快樂刻印加成（長期正向效果）
+IF LOCAL >= 2
+    LOCAL:10 += 2
+ELSEIF LOCAL >= 1
+    LOCAL:10 += 1
+ENDIF
+
+; 高好感加成
+IF LOCAL:2 >= 7
+    LOCAL:10 += 2
+ELSEIF LOCAL:2 >= 4
+    LOCAL:10 += 1
+ENDIF
+
+; 高反感懲罰
+IF LOCAL:4 >= 70
+    LOCAL:10 -= 3
+ELSEIF LOCAL:4 >= 50
+    LOCAL:10 -= 1
+ENDIF
+
+; 高疲勞懲罰
+IF LOCAL:3 >= 80
+    LOCAL:10 -= 2
+ELSEIF LOCAL:3 >= 60
+    LOCAL:10 -= 1
+ENDIF
+
+IF LOCAL:10 != 0
+    CFLAG:TARGET:CF_TRAIN_MOD += LOCAL:10
+    IF CFLAG:TARGET:CF_TRAIN_MOD > 200
+        CFLAG:TARGET:CF_TRAIN_MOD = 200
+    ENDIF
+    IF CFLAG:TARGET:CF_TRAIN_MOD < 0
+        CFLAG:TARGET:CF_TRAIN_MOD = 0
+    ENDIF
+ENDIF
+
+; 高疲勞時休息室額外疲勞緩解（互動後身心放鬆）
+IF LOCAL:3 >= 70
+    CFLAG:TARGET:CF_FATIGUE -= 5
+    IF CFLAG:TARGET:CF_FATIGUE < 0
+        CFLAG:TARGET:CF_FATIGUE = 0
+    ENDIF
+ENDIF
+
+RETURN
+
+; ============================================================
+; Step 5-5：撤離壓力更新
+; ARG = 0=成功 / 1=小失敗 / 2=大失敗 / 3=災難 / 4=善後
+; ============================================================
+
+@INTERACT_UPDATE_MOVEOUT, ARG
+LOCAL = ARG
+
+SELECTCASE LOCAL
+    CASE 0
+        ; 成功：反感低時降低撤離壓力
+        IF PALAM:TARGET:PALAM_DISGUST <= 30
+            IF CFLAG:TARGET:CF_MOVEOUT_COOLDOWN > 0
+                CFLAG:TARGET:CF_MOVEOUT_COOLDOWN -= 1
+            ENDIF
+        ENDIF
+    CASE 1
+        ; 小失敗：壓力不變
+    CASE 2
+        ; 大失敗：增加撤離壓力
+        CFLAG:TARGET:CF_MOVEOUT_COOLDOWN += 2
+        IF CFLAG:TARGET:CF_MOVEOUT_COOLDOWN > 10
+            CFLAG:TARGET:CF_MOVEOUT_COOLDOWN = 10
+        ENDIF
+    CASE 3
+        ; 災難：大幅增加撤離壓力
+        CFLAG:TARGET:CF_MOVEOUT_COOLDOWN += 5
+        IF CFLAG:TARGET:CF_MOVEOUT_COOLDOWN > 10
+            CFLAG:TARGET:CF_MOVEOUT_COOLDOWN = 10
+        ENDIF
+    CASE 4
+        ; 善後安撫：降低撤離壓力
+        IF CFLAG:TARGET:CF_MOVEOUT_COOLDOWN >= 2
+            CFLAG:TARGET:CF_MOVEOUT_COOLDOWN -= 2
+        ELSE
+            CFLAG:TARGET:CF_MOVEOUT_COOLDOWN = 0
+        ENDIF
+ENDSELECT
+RETURN
+
+; ============================================================
+; Step 5-6：三段失敗分派
+; ARG = 失敗等級（0=小失敗 / 1=大失敗 / 2=災難級）
+; 0=小失敗：快樂略降、反感略升
+; 1=大失敗：反感痛苦顯著升、心情降、觸發撤離壓力
+; 2=災難：強制善後路徑，大幅惡化數值
+; RETURN 實際套用的失敗等級
+; ============================================================
+
+@INTERACT_APPLY_FAIL, ARG
+LOCAL = ARG
+
+SELECTCASE LOCAL
+    CASE 0
+        ; 小失敗
+        PALAM:TARGET:PALAM_PLEASURE -= 5
+        IF PALAM:TARGET:PALAM_PLEASURE < 0
+            PALAM:TARGET:PALAM_PLEASURE = 0
+        ENDIF
+        PALAM:TARGET:PALAM_DISGUST += 5
+        IF PALAM:TARGET:PALAM_DISGUST > 100
+            PALAM:TARGET:PALAM_DISGUST = 100
+        ENDIF
+        PRINTFORML 【小失敗】[%CALLNAME:TARGET%] 不太情願，但沒有太大反應。
+        PRINTFORML   → 快樂 {PALAM:TARGET:PALAM_PLEASURE} / 反感 {PALAM:TARGET:PALAM_DISGUST}
+        CALL INTERACT_UPDATE_MOVEOUT, 1
+    CASE 1
+        ; 大失敗
+        PALAM:TARGET:PALAM_PLEASURE -= 5
+        IF PALAM:TARGET:PALAM_PLEASURE < 0
+            PALAM:TARGET:PALAM_PLEASURE = 0
+        ENDIF
+        PALAM:TARGET:PALAM_PAIN += 8
+        IF PALAM:TARGET:PALAM_PAIN > 100
+            PALAM:TARGET:PALAM_PAIN = 100
+        ENDIF
+        PALAM:TARGET:PALAM_DISGUST += 12
+        IF PALAM:TARGET:PALAM_DISGUST > 100
+            PALAM:TARGET:PALAM_DISGUST = 100
+        ENDIF
+        CFLAG:TARGET:CF_MOOD -= 10
+        IF CFLAG:TARGET:CF_MOOD < 0
+            CFLAG:TARGET:CF_MOOD = 0
+        ENDIF
+        PRINTFORML 【大失敗】[%CALLNAME:TARGET%] 明顯不悅，關係產生裂痕。
+        PRINTFORML   → 痛苦 {PALAM:TARGET:PALAM_PAIN} / 反感 {PALAM:TARGET:PALAM_DISGUST} / 心情 {CFLAG:TARGET:CF_MOOD}
+        CALL INTERACT_UPDATE_MOVEOUT, 2
+    CASE 2
+        ; 災難級
+        PALAM:TARGET:PALAM_PAIN += 15
+        IF PALAM:TARGET:PALAM_PAIN > 100
+            PALAM:TARGET:PALAM_PAIN = 100
+        ENDIF
+        PALAM:TARGET:PALAM_DISGUST += 20
+        IF PALAM:TARGET:PALAM_DISGUST > 100
+            PALAM:TARGET:PALAM_DISGUST = 100
+        ENDIF
+        CFLAG:TARGET:CF_MOOD -= 20
+        IF CFLAG:TARGET:CF_MOOD < 0
+            CFLAG:TARGET:CF_MOOD = 0
+        ENDIF
+        CFLAG:TARGET:CF_FATIGUE += 15
+        IF CFLAG:TARGET:CF_FATIGUE > 100
+            CFLAG:TARGET:CF_FATIGUE = 100
+        ENDIF
+        PRINTFORML 【重大失誤】[%CALLNAME:TARGET%] 強烈抗拒，情況急遽惡化！
+        PRINTFORML   強烈建議立即使用「善後安撫」以穩定關係。
+        PRINTFORML   → 痛苦 {PALAM:TARGET:PALAM_PAIN} / 反感 {PALAM:TARGET:PALAM_DISGUST} / 心情 {CFLAG:TARGET:CF_MOOD}
+        CALL INTERACT_UPDATE_MOVEOUT, 3
+ENDSELECT
+
+RETURN LOCAL

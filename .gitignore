@@ -1,0 +1,38 @@
+# --- Emuera 引擎執行檔與 DLL ---
+*.exe
+*.dll
+
+# --- Emuera 運行時設定與紀錄 ---
+emuera.config
+setting.json
+profile
+time.log
+
+# --- 存檔與遊戲進度 ---
+sav/
+*.sav
+global.sav
+
+# --- 除錯日誌 ---
+debug/
+*.log
+
+# --- Emuera.NET 暫存產物 ---
+setting.json.bak
+_redump.txt
+
+# --- Claude Code 本地設定 ---
+.claude/settings.local.json
+
+# --- 開發環境 ---
+.vscode/
+*.code-workspace
+
+# --- 作業系統產生的垃圾檔案 ---
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- 資源與大型檔案（選擇性） ---
+Emuera-Rikai-dictionaries/
+resources/test_assets/

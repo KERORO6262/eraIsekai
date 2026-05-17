@@ -1,0 +1,109 @@
+; ============================================================
+; BASE_LOUNGE.ERB
+; 職責：休息室選單 UI 與互動前置檢查
+;   @BASE_LOUNGE_MENU — 選單路由（由 @BASE_MENU CALL，RETURN 回主選單）
+; 互動指令分派：CALL @INTERACT_DISPATCH（定義於 BASE_INTERACT.ERB）
+; 按鈕區間：300-319 日常互動 / 320-339 成人向互動 / 8 升級 / 9 返回
+; ============================================================
+
+@BASE_LOUNGE_MENU
+$BASE_LOUNGE_MENU_TOP
+CALL BASE_SYNC_DAILY_USES
+LOCAL:10 = 1 + FLAG:BASE_FAC_LV_LOUNGE / 2
+IF LOCAL:10 < 1
+    LOCAL:10 = 1
+ENDIF
+DRAWLINE
+CALL BASE_PRINT_HUD
+DRAWLINE
+PRINTFORML 【休息室 Lv.{FLAG:BASE_FAC_LV_LOUNGE}】
+PRINTFORML 今日互動次數：{TFLAG:BASE_USES_LOUNGE}/{LOCAL:10}
+DRAWLINE
+PRINTL ─ 日常互動 ─
+PRINTL [300] 日常交流（有機會改善心情與好感）
+PRINTL [301] 安撫（有機會有效降低疲勞、穩定情緒）
+PRINTL [302] 娛樂活動（有機會大幅改善心情）
+PRINTL [303] 贈送物資（消耗補給，有機會明顯提升好感）
+
+; 成人向互動：任一住宿 NPC 好感 >= 3 時顯示
+LOCAL:50 = 0
+LOCAL:51 = FLAG:BASE_FAC_LV_ROOM
+IF LOCAL:51 < 0
+    LOCAL:51 = 0
+ELSEIF LOCAL:51 > ROOM_OWNER_MAX
+    LOCAL:51 = ROOM_OWNER_MAX
+ENDIF
+FOR LOCAL:52, 0, LOCAL:51
+    IF ROOM_OWNER:(LOCAL:52) == -1
+        CONTINUE
+    ENDIF
+    IF CFLAG:(ROOM_OWNER:(LOCAL:52)):CF_BOND_LV >= 3
+        LOCAL:50 = 1
+    ENDIF
+NEXT
+IF LOCAL:50 == 1
+    DRAWLINE
+    PRINTL ─ 成人向互動（需好感段位 >= 3）─
+    PRINTL [320] 試探（高風險，有機會提升興奮與開發經驗）
+    PRINTL [321] 開發指令（需好感 >= 5，高收益高風險）
+    PRINTL [329] 善後安撫（降低撤離壓力，穩定關係）
+ENDIF
+
+DRAWLINE
+PRINTL [8] 升級休息室
+PRINTL [9] 返回基地選單
+INPUT RESULT
+
+IF RESULT == 9
+    RETURN
+ENDIF
+IF RESULT == 8
+    CALL FACILITY_UPGRADE_MENU, FLAG:BASE_FAC_LV_LOUNGE, "休息室"
+    IF RESULT == 1
+        FLAG:BASE_FAC_LV_LOUNGE += 1
+    ENDIF
+    GOTO BASE_LOUNGE_MENU_TOP
+ENDIF
+
+; 日常互動：300-319
+; 成人向互動：320-339
+IF RESULT >= 300 && RESULT < 340
+    IF TFLAG:BASE_USES_LOUNGE >= LOCAL:10
+        PRINTL 今日休息室互動次數已達上限。
+        GOTO BASE_LOUNGE_MENU_TOP
+    ENDIF
+
+    ; 成人向：確認是否有合格 NPC
+    IF RESULT >= 320
+        IF LOCAL:50 == 0
+            PRINTL 目前沒有好感足夠的住宿 NPC，無法進行此類互動。
+            GOTO BASE_LOUNGE_MENU_TOP
+        ENDIF
+    ENDIF
+
+    LOCAL:60 = RESULT   ; 儲存 CMD_ID，避免被 SELECT_RESIDENT_NPC 呼叫覆寫
+    CALL SELECT_RESIDENT_NPC
+    IF RESULT < 0
+        GOTO BASE_LOUNGE_MENU_TOP
+    ENDIF
+    TARGET = RESULT
+
+    ; 成人向：檢查目標 NPC 個別好感門檻
+    IF LOCAL:60 == 321
+        IF CFLAG:TARGET:CF_BOND_LV < 5
+            PRINTFORML [%CALLNAME:TARGET%] 好感不足（需段位 5），無法執行此指令。
+            GOTO BASE_LOUNGE_MENU_TOP
+        ENDIF
+    ELSEIF LOCAL:60 >= 320
+        IF CFLAG:TARGET:CF_BOND_LV < 3
+            PRINTFORML [%CALLNAME:TARGET%] 好感不足（需段位 3），無法執行此指令。
+            GOTO BASE_LOUNGE_MENU_TOP
+        ENDIF
+    ENDIF
+
+    CALL INTERACT_DISPATCH, LOCAL:60
+    GOTO BASE_LOUNGE_MENU_TOP
+ENDIF
+
+PRINTL 請輸入有效指令編號（300-329 / 8 / 9）。
+GOTO BASE_LOUNGE_MENU_TOP

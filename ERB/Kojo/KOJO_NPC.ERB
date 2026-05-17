@@ -1,0 +1,284 @@
+; ============================================================
+; KOJO_NPC.ERB
+; 職責：NPC 個別口上函式（Step 6-3）
+;   @KOJO_0010  — NPC 00（Chara ID 1 / 測試NPC_A）冷靜沉穩型
+;   @KOJO_0011  — NPC 01（Chara ID 2 / 測試NPC_B）開朗活潑型
+;   @KOJO_0012  — NPC 02（保留欄位，尚未配置角色）
+;
+; 呼叫方：@KOJO_MESSAGE（KOJO_CORE.ERB）
+; ARG:0 = EVT_ID, ARG:1 = P0, ARG:2 = P1
+;
+; 段位切換基準（Kojo_Standard.md 2.1）：
+;   BOND_TIER  0=疏離(0-2) / 1=普通(3-6) / 2=親密(7+)
+;   LUST_TIER  0=低(0-30)  / 1=中(31-70) / 2=高(71+)
+;   KOJO_TONE  0=正常 / 1=煩躁 / 2=低落（由 @KOJO_TONE_FILTER 寫入）
+;
+; 事件 ID 一覽（Kojo_Standard.md 1.2）：
+;   110 MORNING_GREETING | 120 ROOM_MOVE_IN | 121 ROOM_MOVE_OUT
+;   210 INTERACT_RESULT  | 310 BATTLE_TURN_DRAW（靜默）
+;   311 BATTLE_KEYCARD_HIT | 320 BATTLE_MAP_SUCCESS
+;   330 BATTLE_TEMP_STORE  | 331 BATTLE_TEMP_RETRIEVE
+;   350 BATTLE_END
+; ============================================================
+
+; ============================================================
+; @KOJO_0010 — NPC 00（冷靜沉穩型）
+; Chara ID 1 / 測試NPC_A
+; 特徵：語調簡潔、少用驚嘆號、高好感才展現溫度
+; ============================================================
+
+@KOJO_0010
+#DIM EVT
+#DIM P0
+#DIM P1
+#DIM BOND_TIER
+#DIM LUST_TIER
+EVT = ARG:0
+P0  = ARG:1
+P1  = ARG:2
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 3) ? 1 : 0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 7) ? 2 : BOND_TIER
+LUST_TIER = (CFLAG:TARGET:CF_LUST >= 31) ? 1 : 0
+LUST_TIER = (CFLAG:TARGET:CF_LUST >= 71) ? 2 : LUST_TIER
+
+SELECTCASE EVT
+
+    CASE 110 ; MORNING_GREETING — P0=DAY
+        IF TFLAG:KOJO_TONE == 2
+            PRINTL ……早。身體有點重，讓我緩一下。
+        ELSEIF TFLAG:KOJO_TONE == 1
+            PRINTL 早。（沉默地拿起了工具）
+        ELSEIF BOND_TIER == 2
+            PRINTFORML 早安，{CSTR:TARGET:CALL_PLAYER}。今天的排程你安排好了嗎？
+        ELSEIF BOND_TIER == 1
+            PRINTL 早安。今天有什麼要做的嗎？
+        ELSE
+            PRINTL ……早。
+        ENDIF
+
+    CASE 120 ; ROOM_MOVE_IN — P0=ROOM_SLOT
+        IF BOND_TIER >= 1
+            PRINTL 這裡環境不錯，承蒙關照。
+        ELSE
+            PRINTL ……承蒙關照。
+        ENDIF
+
+    CASE 121 ; ROOM_MOVE_OUT — P0=OLD_SLOT, P1=REASON
+        IF BOND_TIER == 2
+            PRINTFORML {CSTR:TARGET:CALL_PLAYER}，有機會的話……希望還能再合作。
+        ELSEIF BOND_TIER == 1
+            PRINTL 日後有緣再見。
+        ELSE
+            PRINTL 告辭了。
+        ENDIF
+
+    CASE 210 ; INTERACT_RESULT — P0=CMD_ID, P1=結果碼(0=失敗/1=成功/2=大成功)
+        IF P1 == 0
+            PRINTL ……這次不太行。
+        ELSEIF P1 >= 2
+            IF BOND_TIER >= 1
+                PRINTL 效果不錯，繼續保持。
+            ELSE
+                PRINTL 嗯。
+            ENDIF
+        ELSE
+            PRINTL 算是穩住了。
+        ENDIF
+
+    CASE 311 ; BATTLE_KEYCARD_HIT — P0=CARD_ID, P1=SLOT
+        IF BOND_TIER >= 1
+            PRINTL 關鍵牌，拿到了。
+        ELSE
+            PRINTL ……這張。
+        ENDIF
+
+    CASE 320 ; BATTLE_MAP_SUCCESS — P0=SKILL_ID, P1=COMBO_CODE
+        IF LUST_TIER == 2 && BOND_TIER >= 1
+            PRINTL 節奏抓到了，就這手收尾。
+        ELSEIF BOND_TIER >= 1
+            PRINTL 技能成立，打出去。
+        ELSE
+            PRINTL 就這招。
+        ENDIF
+
+    CASE 330 ; BATTLE_TEMP_STORE — P0=CARD_ID, P1=FROM_SLOT
+        IF BOND_TIER >= 1
+            PRINTL 這張先留著，下一輪再用。
+        ELSE
+            PRINTL 保留。
+        ENDIF
+
+    CASE 331 ; BATTLE_TEMP_RETRIEVE — P0=CARD_ID, P1=TO_SLOT
+        IF BOND_TIER >= 1
+            PRINTL 現在是時候了，取出來。
+        ELSE
+            PRINTL 取出。
+        ENDIF
+
+    CASE 350 ; BATTLE_END — P0=勝敗(1=勝/0=敗), P1=回合數
+        IF P0 == 1
+            IF BOND_TIER == 2
+                PRINTFORML 幹得漂亮，{CSTR:TARGET:CALL_PLAYER}。
+            ELSEIF BOND_TIER == 1
+                PRINTL 撐過來了，不錯。
+            ELSE
+                PRINTL 結束了。
+            ENDIF
+        ELSE
+            IF BOND_TIER >= 1
+                PRINTL 這次不夠好。下次要做到。
+            ELSE
+                PRINTL ……。
+            ENDIF
+        ENDIF
+
+    CASEELSE
+        ; 未定義事件靜默返回
+ENDSELECT
+
+RETURN
+
+; ============================================================
+; @KOJO_0011 — NPC 01（開朗活潑型）
+; Chara ID 2 / 測試NPC_B
+; 特徵：語調輕快、善用驚嘆號、低好感也保持正向
+; ============================================================
+
+@KOJO_0011
+#DIM EVT
+#DIM P0
+#DIM P1
+#DIM BOND_TIER
+#DIM LUST_TIER
+EVT = ARG:0
+P0  = ARG:1
+P1  = ARG:2
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 3) ? 1 : 0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 7) ? 2 : BOND_TIER
+LUST_TIER = (CFLAG:TARGET:CF_LUST >= 31) ? 1 : 0
+LUST_TIER = (CFLAG:TARGET:CF_LUST >= 71) ? 2 : LUST_TIER
+
+SELECTCASE EVT
+
+    CASE 110 ; MORNING_GREETING — P0=DAY
+        IF TFLAG:KOJO_TONE == 2
+            PRINTL 早……有點累，讓我緩一下。
+        ELSEIF TFLAG:KOJO_TONE == 1
+            PRINTL ……早。（今天心情不太好）
+        ELSEIF BOND_TIER == 2
+            PRINTFORML 早安！{CSTR:TARGET:CALL_PLAYER}，今天也一起加油吧！
+        ELSEIF BOND_TIER == 1
+            PRINTL 早安！今天有什麼計劃嗎？
+        ELSE
+            PRINTL 早！
+        ENDIF
+
+    CASE 120 ; ROOM_MOVE_IN — P0=ROOM_SLOT
+        IF BOND_TIER >= 1
+            PRINTL 感謝！一定會好好住的！
+        ELSE
+            PRINTL 那就不客氣囉！
+        ENDIF
+
+    CASE 121 ; ROOM_MOVE_OUT — P0=OLD_SLOT, P1=REASON
+        IF BOND_TIER == 2
+            PRINTFORML 還不想走……不過謝謝，{CSTR:TARGET:CALL_PLAYER}。之後有空再來！
+        ELSEIF BOND_TIER == 1
+            PRINTL 之後再來玩！再見！
+        ELSE
+            PRINTL 告辭囉！
+        ENDIF
+
+    CASE 210 ; INTERACT_RESULT — P0=CMD_ID, P1=結果碼(0=失敗/1=成功/2=大成功)
+        IF P1 == 0
+            PRINTL 沒關係！下次一定行的！
+        ELSEIF P1 >= 2
+            IF BOND_TIER >= 1
+                PRINTL 耶！這感覺太棒了！
+            ELSE
+                PRINTL 好耶！
+            ENDIF
+        ELSE
+            IF BOND_TIER >= 1
+                PRINTL 不錯！開心！
+            ELSE
+                PRINTL 好！
+            ENDIF
+        ENDIF
+
+    CASE 311 ; BATTLE_KEYCARD_HIT — P0=CARD_ID, P1=SLOT
+        IF BOND_TIER >= 1
+            PRINTL 拿到了！這是關鍵牌！
+        ELSE
+            PRINTL 哦！這張！
+        ENDIF
+
+    CASE 320 ; BATTLE_MAP_SUCCESS — P0=SKILL_ID, P1=COMBO_CODE
+        IF LUST_TIER == 2 && BOND_TIER >= 1
+            PRINTL 技能放出！這感覺超棒的！
+        ELSEIF BOND_TIER >= 1
+            PRINTL 好！技能出擊！
+        ELSE
+            PRINTL 放！
+        ENDIF
+
+    CASE 330 ; BATTLE_TEMP_STORE — P0=CARD_ID, P1=FROM_SLOT
+        IF BOND_TIER >= 1
+            PRINTL 先放著，後面用！
+        ELSE
+            PRINTL 先存！
+        ENDIF
+
+    CASE 331 ; BATTLE_TEMP_RETRIEVE — P0=CARD_ID, P1=TO_SLOT
+        IF BOND_TIER >= 1
+            PRINTL 現在正是時候！取出來！
+        ELSE
+            PRINTL 取出！
+        ENDIF
+
+    CASE 350 ; BATTLE_END — P0=勝敗(1=勝/0=敗), P1=回合數
+        IF P0 == 1
+            IF BOND_TIER == 2
+                PRINTFORML 我們贏了！{CSTR:TARGET:CALL_PLAYER}，太厲害了！
+            ELSEIF BOND_TIER == 1
+                PRINTL 好耶！打贏了！
+            ELSE
+                PRINTL 贏了！
+            ENDIF
+        ELSE
+            IF BOND_TIER >= 1
+                PRINTL 沒關係！下次一起贏回來！
+            ELSE
+                PRINTL 唉……
+            ENDIF
+        ENDIF
+
+    CASEELSE
+        ; 未定義事件靜默返回
+ENDSELECT
+
+RETURN
+
+; ============================================================
+; @KOJO_0012 — NPC 02（保留欄位）
+; 尚未分配角色，暫時轉發至通用 fallback
+; 待角色定案後依 @KOJO_0010 / @KOJO_0011 格式補齊台詞
+; ============================================================
+
+@KOJO_0012
+#DIM EVT
+#DIM P0
+#DIM P1
+#DIM BOND_TIER
+#DIM LUST_TIER
+EVT = ARG:0
+P0  = ARG:1
+P1  = ARG:2
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 3) ? 1 : 0
+BOND_TIER = (CFLAG:TARGET:CF_BOND_LV >= 7) ? 2 : BOND_TIER
+LUST_TIER = (CFLAG:TARGET:CF_LUST >= 31) ? 1 : 0
+LUST_TIER = (CFLAG:TARGET:CF_LUST >= 71) ? 2 : LUST_TIER
+
+CALL KOJO_DEFAULT, EVT, P0, P1
+
+RETURN

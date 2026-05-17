@@ -1,0 +1,217 @@
+; ============================================================
+; BASE_LIFECYCLE.ERB
+; 職責：基地生命週期結算 Hook
+;   @BASE_EVENT_MORNING — 晨間產出、住宿加成、維護費、工坊佇列
+;   @BASE_EVENT_NIGHT   — 使用次數清空、事件冷卻、撤離冷卻遞減
+;   @BASE_PRINT_MORNING_REPORT — 晨報輸出
+; 呼叫方：CORE_LOOP.ERB 的 @PHASE_MORNING 與 @PHASE_NIGHT
+; ============================================================
+
+; ============================================================
+; 晨間 Tick
+; 防重入：TFLAG:MORNING_DONE（同日只結算一次）
+; 交叉重設：執行後將 TFLAG:NIGHT_DONE 歸零，確保今晚可結算
+; ============================================================
+
+@BASE_EVENT_MORNING
+; 防重入：同一天只允許結算一次
+IF TFLAG:MORNING_DONE != 0
+    RETURN
+ENDIF
+TFLAG:MORNING_DONE = 1
+; 重設晚間旗標，確保今晚可以結算
+TFLAG:NIGHT_DONE = 0
+
+LOCAL:20 = 0
+LOCAL:21 = 0
+LOCAL:22 = 0
+LOCAL:23 = 0
+LOCAL:24 = 0
+LOCAL:25 = 0
+
+; 住宿加成刷新：每日晨間給住宿 NPC 心情恢復（有房可住的安穩感）
+LOCAL:8 = FLAG:BASE_FAC_LV_ROOM
+IF LOCAL:8 < 0
+    LOCAL:8 = 0
+ELSEIF LOCAL:8 > ROOM_OWNER_MAX
+    LOCAL:8 = ROOM_OWNER_MAX
+ENDIF
+FOR LOCAL, 0, LOCAL:8
+    IF ROOM_OWNER:LOCAL == -1
+        CONTINUE
+    ENDIF
+    LOCAL:1 = ROOM_OWNER:LOCAL
+    CFLAG:(LOCAL:1):CF_MOOD += 3
+    IF CFLAG:(LOCAL:1):CF_MOOD > 100
+        CFLAG:(LOCAL:1):CF_MOOD = 100
+    ENDIF
+    ; EVT 110：晨間問候（每位住宿 NPC 各觸發一次）
+    CALL KOJO_MESSAGE, LOCAL:1, 110, FLAG:BASE_DAY, 0
+NEXT
+
+; 首日保護：DAY 1 晨間不執行設施產出與維護費結算
+IF FLAG:BASE_DAY > 1
+    ; 設施產出：工坊提供金錢/材料，訓練室與休息室提供補給回補
+    LOCAL:20 = 40 + FLAG:BASE_FAC_LV_WORK * 60
+    LOCAL:21 = 8 + FLAG:BASE_FAC_LV_WORK * 6
+    LOCAL:22 = FLAG:BASE_FAC_LV_TRAIN * 2 + FLAG:BASE_FAC_LV_LOUNGE * 3
+
+    FLAG:RES_MONEY += LOCAL:20
+    FLAG:RES_MATERIAL += LOCAL:21
+    FLAG:RES_SUPPLY += LOCAL:22
+
+    ; 維護費結算：優先扣補給，不足再扣金錢
+    LOCAL:10 = FLAG:BASE_FAC_LV_ROOM
+    IF LOCAL:10 < 0
+        LOCAL:10 = 0
+    ELSEIF LOCAL:10 > ROOM_OWNER_MAX
+        LOCAL:10 = ROOM_OWNER_MAX
+    ENDIF
+
+    FOR LOCAL, 0, LOCAL:10
+        IF ROOM_OWNER:LOCAL == -1
+            CONTINUE
+        ENDIF
+
+        LOCAL:1 = ROOM_OWNER:LOCAL
+        LOCAL:2 = 3
+        ; 房間等級折扣：每級 -5%，最多折扣至 50%
+        LOCAL:7 = FLAG:BASE_FAC_LV_ROOM * 5
+        IF LOCAL:7 > 50
+            LOCAL:7 = 50
+        ENDIF
+        LOCAL:2 = LOCAL:2 * (100 - LOCAL:7) / 100
+        LOCAL:3 = CFLAG:(LOCAL:1):CF_MAINT_COST_MOD
+        LOCAL:2 = LOCAL:2 + LOCAL:2 * LOCAL:3 / 100
+        IF LOCAL:2 < 1
+            LOCAL:2 = 1
+        ENDIF
+
+        LOCAL:4 = LOCAL:2
+        IF FLAG:RES_SUPPLY >= LOCAL:4
+            FLAG:RES_SUPPLY -= LOCAL:4
+            LOCAL:23 += LOCAL:4
+            CONTINUE
+        ENDIF
+
+        LOCAL:5 = LOCAL:4 - FLAG:RES_SUPPLY
+        LOCAL:23 += FLAG:RES_SUPPLY
+        FLAG:RES_SUPPLY = 0
+
+        LOCAL:6 = LOCAL:5 * 12
+        IF FLAG:RES_MONEY >= LOCAL:6
+            FLAG:RES_MONEY -= LOCAL:6
+            LOCAL:24 += LOCAL:6
+        ELSE
+            LOCAL:24 += FLAG:RES_MONEY
+            FLAG:RES_MONEY = 0
+            LOCAL:25 += 1
+        ENDIF
+    NEXT
+ENDIF
+
+; 工坊生產佇列推進：晨間天數遞減與完工發放
+LOCAL:30 = 0
+LOCAL:31 = 0
+LOCAL:32 = 0
+FOR LOCAL, 0, WORK_Q_MAX
+    IF WORK_Q_REMAIN:LOCAL > 0
+        WORK_Q_REMAIN:LOCAL -= 1
+        IF WORK_Q_REMAIN:LOCAL < 0
+            WORK_Q_REMAIN:LOCAL = 0
+        ENDIF
+        IF WORK_Q_REMAIN:LOCAL == 0 && WORK_Q_TYPE:LOCAL != 0
+            LOCAL:31 = WORK_Q_TYPE:LOCAL
+            ITEM:(LOCAL:31) += 1
+            WORK_Q_TYPE:LOCAL = 0
+            LOCAL:30 += 1
+            IF LOCAL:32 == 0
+                LOCAL:32 = LOCAL:31
+            ENDIF
+        ENDIF
+    ENDIF
+NEXT
+
+; 防呆：資源不可低於 0
+IF FLAG:RES_MONEY < 0
+    FLAG:RES_MONEY = 0
+ENDIF
+IF FLAG:RES_MATERIAL < 0
+    FLAG:RES_MATERIAL = 0
+ENDIF
+IF FLAG:RES_SUPPLY < 0
+    FLAG:RES_SUPPLY = 0
+ENDIF
+
+; 暫存晨報數據供 @BASE_PRINT_MORNING_REPORT 讀取
+TFLAG:MORNING_INCOME_MONEY = LOCAL:20
+TFLAG:MORNING_INCOME_MAT = LOCAL:21
+TFLAG:MORNING_INCOME_SUP = LOCAL:22
+TFLAG:MORNING_COST_SUP = LOCAL:23
+TFLAG:MORNING_COST_MONEY = LOCAL:24
+TFLAG:MORNING_WARN_NPC = LOCAL:25
+TFLAG:MORNING_CRAFT_COUNT = LOCAL:30
+TFLAG:MORNING_CRAFT_LAST = LOCAL:32
+
+CALL BASE_PRINT_MORNING_REPORT
+RETURN
+
+; ============================================================
+; 晨報輸出（讀取 TFLAG 暫存數據）
+; 由 @BASE_EVENT_MORNING 結尾呼叫
+; ============================================================
+
+@BASE_PRINT_MORNING_REPORT
+PRINTL --- 晨報 ---
+PRINTFORML 設施收益：金錢 +{TFLAG:MORNING_INCOME_MONEY} / 材料 +{TFLAG:MORNING_INCOME_MAT} / 補給 +{TFLAG:MORNING_INCOME_SUP}
+PRINTFORML 維護扣減：補給 -{TFLAG:MORNING_COST_SUP} / 金錢 -{TFLAG:MORNING_COST_MONEY}
+IF TFLAG:MORNING_WARN_NPC > 0
+    PRINTFORML [警告] 有 {TFLAG:MORNING_WARN_NPC} 名入住 NPC 維護費未足額支付！
+ENDIF
+IF TFLAG:MORNING_CRAFT_COUNT > 0
+    IF TFLAG:MORNING_CRAFT_COUNT == 1
+        PRINTFORML [工坊] 製作完成：%ITEMNAME:(TFLAG:MORNING_CRAFT_LAST)%
+    ELSE
+        PRINTFORML [工坊] 製作完成：{TFLAG:MORNING_CRAFT_COUNT} 項（含 %ITEMNAME:(TFLAG:MORNING_CRAFT_LAST)%）
+    ENDIF
+ENDIF
+PRINTFORML 當前資源：金錢 {FLAG:RES_MONEY} / 材料 {FLAG:RES_MATERIAL} / 補給 {FLAG:RES_SUPPLY}
+RETURN
+
+; ============================================================
+; 晚間 Tick
+; 防重入：TFLAG:NIGHT_DONE（同日只結算一次）
+; 交叉重設：執行後將 TFLAG:MORNING_DONE 歸零，確保明天早上可結算
+; ============================================================
+
+@BASE_EVENT_NIGHT
+; 防重入：同一天晚間只允許結算一次
+IF TFLAG:NIGHT_DONE != 0
+    RETURN
+ENDIF
+TFLAG:NIGHT_DONE = 1
+; 重設晨間旗標，確保明天早上可以結算
+TFLAG:MORNING_DONE = 0
+
+; 設施每日使用次數清空（確保次日從零計數）
+TFLAG:BASE_USES_TRAIN = 0
+TFLAG:BASE_USES_LOUNGE = 0
+
+; 晚間事件冷卻遞減（逐日 -1，歸零後可再次觸發）
+IF TFLAG:EVT_COOLDOWN_RES > 0
+    TFLAG:EVT_COOLDOWN_RES -= 1
+ENDIF
+IF TFLAG:EVT_COOLDOWN_BASE > 0
+    TFLAG:EVT_COOLDOWN_BASE -= 1
+ENDIF
+IF TFLAG:EVT_COOLDOWN_NPC > 0
+    TFLAG:EVT_COOLDOWN_NPC -= 1
+ENDIF
+
+; 撤離冷卻遞減（所有 NPC 逐日 -1）
+FOR LOCAL, 0, CHARANUM
+    IF CFLAG:(LOCAL):CF_MOVEOUT_COOLDOWN > 0
+        CFLAG:(LOCAL):CF_MOVEOUT_COOLDOWN -= 1
+    ENDIF
+NEXT
+RETURN

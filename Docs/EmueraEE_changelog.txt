@@ -1,0 +1,281 @@
+﻿=="v55"
+ONEBINPUT,ONEBINPUTS追加
+VVII氏のパッチで.NET 10対応
+daughterpatch氏によるcsprojの整理
+ERDで2次元配列変数の文字列型変数に名前を付けたときに参照されない不具合を修正
+
+
+=="v54"
+動作の安定性を改善
+SPRITEGETCOLORの返り値が変だったのを修正
+BINPUTSが常に0を返してしまう問題を修正
+VVII氏のパッチをマージ（リソース読み込み失敗時にエラーログを出力、VSCode用にプラグイン記述を調整）
+libwebpのdllを更新（CRER氏）
+上記の2点によりリソース読み込みの挙動を改善
+TIMESが特定の地域で挙動がおかしくなってしまうのを修正
+私家版v23～24をマージ
+
+
+==="v53"
+HTML_PRINTで大きい画像を使用したときにボタンの当たり判定が無くなってしまう不具合修正
+ログ出力時にGameBase.csvで定義されたバリアント名とバージョンも出力するように
+
+==="v52"
+スプライト生成ログで例外エラーが出るので一旦取り下げ
+TINPUTが高速すぎてまともに機能していなかったのを修正
+不要な参照を削除することでEmuera本体のファイルサイズを大幅に縮小
+ERBフォルダ内で、フォルダ名に「#」が付くフォルダを優先して読み込むように 過去バージョンとの互換性の維持が目的なので通常のバリアントでは動作に影響無し（CRER氏によるバグフィクスに感謝）
+CRER氏によるパッチでHTML_SUBSTRINGを修正
+
+==="v51"
+v50は欠番
+daughterpatch氏のパッチでSPRITEANNIME修正、ツールチップの修正、ログがUTF-8 BOM付きで保存されるように
+オプションから行連結時の改行コードを置換できるように（デフォルトは半角スペース1個）
+CRER氏のパッチで一部翻訳を補完、クリップボード機能をツール化
+CSVで指定したスプライトにアルファベット小文字を用いていると正常に生成されない不具合を修正
+コンフィグでロードレポートを表示するとCSVスプライトの生成ログも表示されるように
+再起動処理の変更でQUIT_AND_RESTART系命令が機能してなかったのを修正
+JukesBouver氏のパッチで画面上の文字折り返しが最適な文字数で行われるように
+
+==="v49"
+div内のボタンがマウスオーバー判定されない不具合、srcbが表示されない不具合を修正
+JukesBouver99氏によるメモリ最適化
+Alex Swift氏によるRikaiDialog処理の修正
+resourcesフォルダ内のCSVでスプライトを生成する処理を修正及び調整、それに伴いSPRITEDISPOSEALLも修正
+daughter氏のパッチをマージ。EXISTMETH、GETMETH、GETMETHS追加
+
+==="v48fix"
+v48で実装したミドルクリックの判定が変だったのを修正
+resourcesフォルダ内のCSVが多重ロードされる不具合修正
+各Xml、Map、DataTableが属性に合わせて適切な初期化がされるように（セーブされるデータ→別データロード時に消去、グローバルなデータ→RESETGLOBAL、LOADGLOBAL時に消去）
+私家版v22の変更をマージ
+テキストボックスで↑キーでログを遡れないのを修正
+OUTPUTLOGに第二引数追加。非0のときにバージョンインフォを含めない
+MogeMoc氏(RainForTW)の修正をマージ。HTML_PRINTで表示した画像がdepthによらずマウスオーバーでsrcbが適用されるように
+番号0のキャラが複数定義されてるときに警告を出すように
+別プロセスでファイルが開かれているときの例外対策を追加
+
+==="v48"
+VVII氏作のEmuera.NET（https://gitlab.com/VVIIlet/emuera）のmasterブランチをマージ(2024/06/30現在)
+各動作のQoL上昇に加え、VAR系命令、PRINTN系命令、HTML_PRINT_ISLAND命令を追加。詳しくはdocs参照
+INPUT系でミドルクリック（マウスホイールによるクリック）を受け付けるように。RESULTS:1に3が入る
+HOTKEY関連命令追加(JukesBouver99氏)
+EMEEでのみ動作するコメントアウト記号「;^;」を追加
+
+=== "v47"
+v46で行ったGETDISPLAYLINEの修正に不備があったので以前の仕様にロールバック
+Neo_Kesha氏によるバックグラウンド操作系命令追加
+Neo_Kesha氏によるCSVエイリアス機能追加
+ユケッス(JukesBouver99)氏によるBITMAP_CACHE_ENABLE追加
+fairylord(KFCの人)氏による.NET 8対応
+
+==="v46"
+GETDISPLAYLINEの引数がLINECOUNTに即した行を返すように修正
+FLOWINPUT拡張。詳しくはread meもしくはEMEEwikiで
+FLOWINPUTS追加
+
+==="v45"
+Ignominious.Reverie氏のパッチでNAudio版の機能拡張＆安定性向上
+フォントを指定せずGDRAWTEXTを行ったときに例外落ちするのを修正
+GETCONFIG、GETCONFIGSでEMEE拡張コンフィグも取得できるように
+
+==="v44"
+PLAYSOUNDの第二引数で再生回数を設定できるように
+
+==="v43"
+MOUSEB、UPDATECHECK、SPRITEANIMEADDFRAMEの不具合修正
+NAudio版の動作の安定性向上（Ignminious.Reverie、CRER）
+いくつかのコンフィグ項目の翻訳漏れを修正
+MogeMoc氏のリソースファイル読み込み処理のメモリ軽量化をマージ（RainForTW）
+
+==="v42"
+微修正や翻訳漏れなど修正。v43の項で解説
+
+==="v41fix"
+webpライブラリの脆弱性を修正（https://nvd.nist.gov/vuln/detail/CVE-2023-4863）
+同梱の「libwebp.dll」に置き換え、「libsharpyuv.dll」を追加して使用してください
+
+==="v41"
+TOOLTIP_IMG追加
+Linux向けに音楽再生ライブラリにNAudioを使用したバージョンを同梱（Ignominious.Reverie氏）
+
+==="v40"
+諸々のバグを修正したり、Wine等に向けた最適化など
+Emueraのアプデではないが、サーバーが死んだOSDNからEmueraのドキュメントをEM+EEのwikiに移植しました
+https://evilmask.gitlab.io/emuera.em.doc/index.html
+
+==="v39fix"
+CRER氏のパッチでエンコード違いのファイルが混在していても正常に読み込まれるように
+GETDOINGFUNCTION追加
+またまたCLEARLINEとdiv併用時の挙動が怪しいバグを修正 もう起きないはず
+
+==="v39"
+CRER氏のパッチでDPIスケールの問題を解決 したはず
+ARRAYREMOVEで第三引数を0以下にした時に、以降の配列を全て消す挙動が再現されてなかったのを修正
+PRINTCとPRINTLCの文字数が合わない問題を修正
+リソースCSV再読み込み機能を実装
+
+==="v38fix"
+* CurrentCultureが変わってるせいで一部の関数と命令の挙動がおかしくなっていたのを修正
+
+==="v38"
+* 一部のフォントでGDRAWTEXT及びGGETTEXTSIZEの挙動が怪しいのを修正
+* EXISTFUNCTIONが大文字小文字無視のオプションに沿った挙動になるように
+* CRER氏の協力により.NET 7に正式対応。感謝
+
+=== "v37"
+* UTF-8(BOM無し)のファイルを扱えるコンフィグ項目を追加
+* v36で行ったEXISTFUNCTIONの修正が処理時間に大きな影響を与えていたため、第二引数に非0を指定したときのみ大文字小文字を無視するように変更
+* TINPUT系でマウスクリックオプションを付けたときにタイマーの挙動が怪しいのを修正
+
+=== "v36"
+* フォントファイル(ttf.otf)に対応
+* ENUMFUNC及びEXISTFUNCTIONで大文字小文字の表記揺れで正常に検索できない問題を修正
+
+=== "v35fix"
+* BINPUTSの不具合を修正
+* 私家版v18とマージ
+* BINPUTで余計な改行が入ってしまうのを修正
+
+=== "v35"
+* 再起動を繰り返すとメモリリークが起きる問題に対応するため、再起動処理を変更
+* タイプ初期化子エラーの原因が判明したためtry-catch式でエラーメッセージを出すように(WMPの未インストールが原因)
+* ERDの識別子とローカル変数の重複を確認するオプション項目を追加
+* PRINT中に改行せずにBINPUTを実行した際に、その行をボタンとして認識しない不具合を修正
+
+=== "v34
+* GDASHSTYLE追加
+
+=== "v33"
+* GETDISPLAYLINE追加
+* GCREATEFROMFILE拡張
+
+=== "v32"
+* GDRAWLINE追加
+
+=== "v31fix"
+* BINPUTとdiv機能を組み合わせると正常に動かない不具合を修正
+* BINPUT実行時にボタンが一つも無い場合はデフォルト値を返すように。デフォルト値も無ければ従来どおりエラー
+* BINPUT実行時になんらかの原因で画面描画が行われずdivとの併用ができなくなる不具合の修正
+
+=== "v31"
+* BINPUT及びBINPUTS命令追加
+
+=== "v30"
+* SKIPLOG命令追加
+* メニューアクセスのショートカットキーが効かなくなっていた不具合を修正
+* CLEARLIINEとdivを併用した時に条件下で起こる不具合を修正(EM)
+
+=== "v29"
+* GCREATEFROMFILEが機能しなくなっていたのを修正
+* EMのdiv機能でmargin,border,paddingを指定したときにdiv内の文字が追従しなかったのを修正
+* 翻訳辞書無効時にも内部処理が行われていて描画が重くなっていたのを修正
+* MOUSEB追加
+* SPRITEDISPOSEALL追加
+
+=== "v28"
+* EMのINPUT拡張が機能していなかったのを修正
+* EE独自にINPUT命令を拡張
+* FLOWINPUT追加
+
+=== "v27"
+* JukesBouver99氏のパッチ提供で翻訳英語辞書に対応
+
+=== "v26"
+* GSETPENによるGDRAWTEXT機能拡張
+* GGETPEN,GGETPENWIDTH,GGETBRUSH追加
+* ツールチップ機能拡張命令追加
+
+=== "v25"
+* Emuera-AnchorのClipboard機能を移植
+* 翻訳を補完
+
+=== "V24"
+* 多言語化に対応
+* GETNUMを多次元配列ERDに対応
+* ERDNAME追加
+* 私家版v16とマージ
+
+=== "v23"
+* ERD機能を二次元配列、三次元配列でも使えるように
+ 
+=== "v22"
+* 仕様変更：ERD機能は一つの変数名に対し複数の定義ファイルの中に、同じ識別子が定義されている場合だけ、起動時にエラー吐いて終了する。ひとつの配列に複数の識別子を指定可能になる。
+* INPUTANY追加
+
+=== "v21"
+* GETTEXTBOX,SETTEXTBOX追加
+
+=== "v20"
+* DAY,TIME,MONEYにCSVを適用可能に
+
+=== "v19"
+* ERD読み込みの高速化
+* デバッグコンソールで_Rename.csvを使えるように
+
+=== "v18"
+* INPUTMOUSEKEYで文字列ボタンを扱えるように
+* VariableSize.csvでCOUNTを使用禁止変数に設定できるように
+* キーマクロをUTF-8で保存するように
+
+=== "v17"
+* ERD機能のオン/オフ切り替えオプションを追加。オフにすると起動が少し早くなる
+
+=== "v16"
+* ERD機能の修正（CSV変数の添字から要素を取得できない不具合）
+* ホットキー機能拡張 Emuera-Anchorからの移植
+
+=== "v15"
+* ERD機能の修正（ハードコーディング変数に定義されてない引数を定義した時の例外落ち）
+* GDRAWTEXTの修正（GSETFONTを使用せずに実行した場合の例外落ち）
+
+=== "v14"
+* 関数追加：`GETMEMORYUSAGE`, `CLEARMEMORY`
+
+=== "v13"
+* ERD機能追加
+
+=== "v12"
+* 関数追加：`FORCE_BEGIN`
+* `PLAYSOUND`機能拡張 10チャンネルに対応
+
+=== "v11fix"
+* `UPDATECHECK`修正
+
+=== "v11"
+* 関数追加：`GDRAWGWITHROTATE`, `QUIT_AND_RESTART`, `FORCE_QUIT`, `FORCE_QUIT_AND_RESTART`
+
+=== "v10"
+* 関数追加：`UPDATECHECK`
+
+=== "v9"
+* WebPに対応
+
+=== "v8"
+* 関数追加：`TRYCALLF`, `TRYCALLFORMF`
+
+=== "v7"
+* 関数追加：`GGETTEXTSIZE`
+
+=== "v6"
+* 関数追加：`EXISTFUNCTION`
+
+=== "v5fix"
+* `OUTPUTLOG`機能拡張の脆弱性を修正
+
+=== "v5"
+* `OUTPUTLOG`機能拡張
+
+=== "v4"
+* 関数追加：`GGETFONT`, `GGETFONTSIZE`
+
+=== "v3"
+* 関数追加：`GDRAWTEXT`
+
+=== "v2"
+* `INPUTMOUSEKEY`機能拡張
+
+=== "v1"
+初公開
+* 関数追加：`PLAYSOUND`,`STOPSOUND`,`PLAYBGM`,`STOPBGM`,`EXISTSOUND`,`SETSOUNDVOLUME`,`SETBGMVOLUME`
+

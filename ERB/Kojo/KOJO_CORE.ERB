@@ -1,0 +1,167 @@
+; ============================================================
+; KOJO_CORE.ERB
+; 職責：口上系統（KOJO）核心分派框架
+;   @KOJO_MESSAGE      — 統一入口：防重入 + TARGET 切換 + 動態調用
+;   @KOJO_TONE_FILTER  — 語氣濾鏡：依疲勞/心情寫入 TFLAG:KOJO_TONE
+;   @KOJO_DEFAULT      — 全事件通用 fallback，避免沉默或報錯
+;   @SYS_KOJO_INIT     — 稱呼初始化：入住時設定 CSTR 稱呼欄位
+;
+; 事件 ID 規範（見 Kojo_Standard.md 第 1 節）：
+;   0-99   系統通用
+;   100-199 基地與住宿（110=晨間問候, 120=入住, 121=撤離）
+;   200-299 互動結果（210=互動結算）
+;   300-399 戰鬥流程（310=抽牌, 320=技能映射, 330=Temp存牌, 350=戰鬥結束）
+;   900-999 Debug 強制觸發
+;
+; 呼叫方式：
+;   CALL KOJO_MESSAGE, CHARA_ID, EVT_ID, P0, P1
+;
+; 防重入策略：
+;   戰鬥區間（300-399）在同一 BATTLE_TURN 內同一事件只允許一次。
+;   基地/互動區間由呼叫方（@BASE_MORNING_TICK 等）管控頻率。
+;
+; NPC 分派規則（動態調用）：
+;   TRYCCALLFORM KOJO_NPC{CH}_EVT{EVT}, P0, P1
+;   → 依 CH（Chara ID）與 EVT（事件 ID）組合成函式名稱動態調用。
+;   → 若函式不存在（NPC 尚未實作該事件），則 CATCH 區塊呼叫 @KOJO_DEFAULT。
+;   → 新增 NPC 事件只需在對應 NPC 資料夾建立函式，無需修改本檔案。
+;   目錄結構：ERB/Kojo/NPC_{ID}_{名稱}/KOJO_{ID}_BASE.ERB（EVT 100-299）
+;                                      KOJO_{ID}_BATTLE.ERB（EVT 300-399）
+; ============================================================
+
+; ============================================================
+; @KOJO_MESSAGE — 統一入口
+; ARG:0 = CHARA_ID
+; ARG:1 = EVT_ID
+; ARG:2 = P0（事件附帶參數 0）
+; ARG:3 = P1（事件附帶參數 1）
+; ============================================================
+
+@KOJO_MESSAGE, ARG, ARG:1, ARG:2, ARG:3
+#DIM CH
+#DIM EVT
+#DIM P0
+#DIM P1
+CH  = ARG:0
+EVT = ARG:1
+P0  = ARG:2
+P1  = ARG:3
+
+; 防重入：戰鬥區間（300-399）同一回合同一事件只允許觸發一次
+IF EVT >= 300 && EVT <= 399
+    IF TFLAG:KOJO_LAST_EVT == EVT && TFLAG:KOJO_LAST_TURN == TFLAG:BATTLE_TURN
+        RETURN
+    ENDIF
+    TFLAG:KOJO_LAST_EVT  = EVT
+    TFLAG:KOJO_LAST_TURN = TFLAG:BATTLE_TURN
+ENDIF
+
+; 切換 TARGET，讓口上函式以 TARGET 取 CFLAG/CSTR 值
+TARGET = CH
+
+; 語氣濾鏡：計算 TFLAG:KOJO_TONE（口上函式可選用）
+CALL KOJO_TONE_FILTER
+
+; 動態調用：依 CH 與 EVT 組合函式名稱 KOJO_NPC{CH}_EVT{EVT}
+; 若 NPC 尚未實作該事件函式，CATCH 區塊自動轉發至通用 fallback
+TRYCCALLFORM KOJO_NPC{CH}_EVT{EVT}, P0, P1
+CATCH
+    CALL KOJO_DEFAULT, EVT, P0, P1
+ENDCATCH
+
+RETURN
+
+; ============================================================
+; @KOJO_TONE_FILTER — 語氣濾鏡
+; INPUT:  TARGET 已切換至目標 NPC
+; OUTPUT: TFLAG:KOJO_TONE
+;   0 = 正常
+;   1 = 煩躁（心情低落）
+;   2 = 低落（過度疲勞）
+; 優先判斷疲勞（身體狀態重於情緒）
+; ============================================================
+
+@KOJO_TONE_FILTER
+IF CFLAG:TARGET:CF_FATIGUE >= 81
+    TFLAG:KOJO_TONE = 2
+ELSEIF CFLAG:TARGET:CF_MOOD <= 30
+    TFLAG:KOJO_TONE = 1
+ELSE
+    TFLAG:KOJO_TONE = 0
+ENDIF
+RETURN
+
+; ============================================================
+; @KOJO_DEFAULT — 全事件通用 fallback
+; ARG:0 = EVT_ID
+; ARG:1 = P0
+; ARG:2 = P1
+; 原則：輸出簡短、中性，不搶佔 NPC 個性空間
+; ============================================================
+
+@KOJO_DEFAULT, ARG, ARG:1, ARG:2
+#DIM EVT
+#DIM P0
+#DIM P1
+EVT = ARG:0
+P0  = ARG:1
+P1  = ARG:2
+
+SELECTCASE EVT
+    CASE 110 ; MORNING_GREETING — 每日晨間，P0=DAY
+        PRINTL 早安。
+
+    CASE 120 ; ROOM_MOVE_IN — 入住，P0=ROOM_SLOT
+        PRINTL 請多指教。
+
+    CASE 121 ; ROOM_MOVE_OUT — 撤離，P0=OLD_SLOT, P1=REASON
+        PRINTL 告辭了。
+
+    CASE 210 ; INTERACT_RESULT — 互動結算，P0=CMD_ID, P1=結果碼(0/1/2)
+        IF P1 >= 1
+            PRINTL 嗯。
+        ENDIF
+
+    CASE 310 ; BATTLE_TURN_DRAW — 回合抽牌，P0=TURN
+        ; 靜默：高頻事件，避免刷屏
+
+    CASE 311 ; BATTLE_KEYCARD_HIT — 關鍵牌命中，P0=CARD_ID, P1=SLOT
+        PRINTL ……這張。
+
+    CASE 320 ; BATTLE_MAP_SUCCESS — 技能映射成功，P0=SKILL_ID, P1=COMBO_CODE
+        PRINTL 就這招。
+
+    CASE 330 ; BATTLE_TEMP_STORE — Temp 存牌，P0=CARD_ID, P1=FROM_SLOT
+        PRINTL 先存著。
+
+    CASE 331 ; BATTLE_TEMP_RETRIEVE — Temp 取牌，P0=CARD_ID, P1=TO_SLOT
+        PRINTL 取出來了。
+
+    CASE 350 ; BATTLE_END — 戰鬥結束，P0=勝敗(1/0), P1=回合數
+        IF P0 == 1
+            PRINTL 回來了。
+        ELSE
+            PRINTL ……。
+        ENDIF
+
+    CASEELSE
+        ; 未定義事件：靜默返回，避免沉默錯誤
+ENDSELECT
+
+RETURN
+
+; ============================================================
+; @SYS_KOJO_INIT — 稱呼初始化
+; 入住時呼叫（由 Step 6-2 掛入 @SYS_ROOM_MOVE_IN 末尾）
+; INPUT: TARGET 已設定為入住 NPC
+; 只在欄位為空時寫入預設值，不覆蓋已設定的稱呼
+; ============================================================
+
+@SYS_KOJO_INIT
+IF CSTR:TARGET:CALL_PLAYER == ""
+    CSTR:TARGET:CALL_PLAYER = "你"
+ENDIF
+IF CSTR:TARGET:CALL_SELF == ""
+    CSTR:TARGET:CALL_SELF = "我"
+ENDIF
+RETURN
